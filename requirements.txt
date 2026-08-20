@@ -1,0 +1,6 @@
+deepeval
+python-dotenv
+openpyxl
+pandas
+google-genai
+requests
