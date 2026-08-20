@@ -1,10 +1,9 @@
-import os
 import pandas as pd
 
-from llm_model import llm
-from metrics import evaluate_hallucination
-from report_generator import generate_report
-from logger import info, section
+from src.llm_model import llm
+from src.metrics import evaluate_hallucination
+from src.report_generator import generate_report
+from src.logger import info, section
 
 
 DATASET_PATH = "dataset/evaluation_data.xlsx"
@@ -18,7 +17,6 @@ def main():
         data = pd.read_excel(DATASET_PATH)
 
         info(f"Loaded {len(data)} evaluation scenarios")
-        info(f"Model: {os.getenv('GEMINI_MODEL')}")
 
         results = []
 
@@ -32,7 +30,9 @@ def main():
             section(scenario_id)
 
             try:
+                # Generate response only when Actual_Output is empty
                 if pd.isna(actual_output) or not str(actual_output).strip():
+
                     info("Generating response...")
 
                     actual_output = llm.invoke(
@@ -72,23 +72,24 @@ Generate a concise response for this requirement.
                 })
 
             except Exception as e:
-                error_message = str(e)
 
-                if "quota" in error_message.lower() or "429" in error_message:
+                error_message = str(e).lower()
+
+                if "quota" in error_message or "429" in error_message:
                     reason = "API quota or rate limit exceeded."
                     info("API quota or rate limit exceeded.")
 
-                elif "503" in error_message or "unavailable" in error_message.lower():
-                    reason = "Gemini service temporarily unavailable."
-                    info("Gemini service temporarily unavailable.")
+                elif "503" in error_message or "unavailable" in error_message:
+                    reason = "Gemini service is temporarily unavailable."
+                    info("Gemini service is temporarily unavailable.")
 
-                elif "timeout" in error_message.lower():
+                elif "timeout" in error_message:
                     reason = "Evaluation timed out."
                     info("Evaluation timed out.")
 
                 else:
-                    reason = error_message
-                    info(f"Evaluation error: {error_message}")
+                    reason = "Unexpected evaluation error."
+                    info("Unexpected evaluation error.")
 
                 info("Status: ERROR")
 
@@ -108,11 +109,11 @@ Generate a concise response for this requirement.
         section("Completed")
         info(f"Report: {REPORT_PATH}")
 
-    except FileNotFoundError as e:
-        info(f"File not found: {e}")
+    except FileNotFoundError:
+        info(f"Dataset not found: {DATASET_PATH}")
 
-    except Exception as e:
-        info(f"Execution failed: {e}")
+    except Exception:
+        info("Unable to complete evaluation.")
 
 
 if __name__ == "__main__":

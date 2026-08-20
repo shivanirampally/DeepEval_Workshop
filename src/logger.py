@@ -1,5 +1,5 @@
 def info(message):
-    print(f"{message}")
+    print(f"[Info] {message}")
 
 
 def section(message):
