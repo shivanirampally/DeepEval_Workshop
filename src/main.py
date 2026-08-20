@@ -30,7 +30,6 @@ def main():
             section(scenario_id)
 
             try:
-                # Generate response only when Actual_Output is empty
                 if pd.isna(actual_output) or not str(actual_output).strip():
 
                     info("Generating response...")

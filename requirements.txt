@@ -1,6 +1,5 @@
-deepeval
-python-dotenv
-openpyxl
-pandas
-google-genai
-requests
+deepeval==4.1.8
+python-dotenv==1.2.3
+openpyxl==3.1.5
+pandas==3.0.5
+google-genai==2.18.1
