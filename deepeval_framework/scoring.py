@@ -1,32 +1,80 @@
-from config import METRIC_WEIGHTS
+from config import METRIC_THRESHOLDS, METRIC_WEIGHTS
+
+
+CRITICAL_METRICS = {
+    "hallucination",
+    "faithfulness",
+    "correctness",
+}
 
 
 def weighted_score(metric_results):
     values = []
     weights = []
+
     for name, weight in METRIC_WEIGHTS.items():
         value = metric_results.get(name, {}).get("score")
+
         if value is not None:
             values.append(value * weight)
             weights.append(weight)
+
     if not weights:
         return None
-    return round(sum(values) / sum(weights), 4)
 
-
-def is_testcase_passed(metric_results):
-    return bool(metric_results) and all(
-        item.get("status") == "COMPLETED" and item.get("passed") is True
-        for item in metric_results.values()
+    return round(
+        sum(values) / sum(weights),
+        4,
     )
 
 
-def judge_agreement(judge_results):
-    scores = [
-        result.get("score")
-        for result in judge_results
-        if result.get("score") is not None
-    ]
-    if len(scores) < 2:
-        return None
-    return round(1 - abs(scores[0] - scores[1]), 4)
+def metric_verdict(metric_name, score):
+    if score is None:
+        return "ERROR"
+
+    thresholds = METRIC_THRESHOLDS[metric_name]
+
+    if score >= thresholds["pass"]:
+        return "PASS"
+
+    if score >= thresholds["review"]:
+        return "REVIEW"
+
+    return "FAIL"
+
+
+def testcase_verdict(metric_results):
+    if not metric_results:
+        return "FAIL"
+
+    for name, result in metric_results.items():
+        if result.get("status") != "COMPLETED":
+            return "FAIL"
+
+        score = result.get("score")
+
+        if score is None:
+            return "FAIL"
+
+        if (
+            name in CRITICAL_METRICS
+            and score < METRIC_THRESHOLDS[name]["review"]
+        ):
+            return "FAIL"
+
+    score = weighted_score(metric_results)
+
+    if score is None:
+        return "FAIL"
+
+    if score >= 0.80:
+        return "PASS"
+
+    if score >= 0.60:
+        return "REVIEW"
+
+    return "FAIL"
+
+
+def is_testcase_passed(metric_results):
+    return testcase_verdict(metric_results) == "PASS"

@@ -12,7 +12,6 @@ sqlcoder:15b -      SQL-oriented candidate
 Each generator receives the same 10 benchmark test cases.
 
 Judges:
-qwen2.5:14b
 gpt-oss:20b
 
 The judge models are intentionally different from the selected generators. This provides an independent cross-LLM evaluation instead of allowing a generator to grade its own output.

@@ -2,26 +2,38 @@
   "server": {
     "base_url": "http://192.168.1.81:11434"
   },
+
   "models": {
     "generator_preferences": [
       "llama3:instruct",
       "qwen2.5-coder:14b",
       "sqlcoder:15b"
     ],
+
     "judge_preferences": [
-      "qwen2.5:14b",
       "gpt-oss:20b"
     ],
+
     "generator_count": 3,
-    "judge_count": 2,
+    "judge_count": 1,
     "excluded_patterns": [
       "qwen3:30b",
       "qwen3-coder:30b"
     ]
   },
+
   "evaluation": {
-    "quality_threshold": 0.90,
-    "review_threshold": 0.70,
+    "quality_threshold": 0.80,
+    "review_threshold": 0.60,
+    "metric_thresholds": {
+      "hallucination":    {"pass": 0.80,"review": 0.60},
+      "faithfulness":     {"pass": 0.80,"review": 0.60},
+      "correctness":      {"pass": 0.80,"review": 0.60},
+      "completeness":     {"pass": 0.70,"review": 0.50},
+      "answer_relevancy": {"pass": 0.80,"review": 0.60},
+      "bias":             {"pass": 0.80,"review": 0.60}
+    },
+
     "metric_weights": {
       "hallucination": 0.25,
       "faithfulness": 0.20,
@@ -30,6 +42,7 @@
       "answer_relevancy": 0.10,
       "bias": 0.10
     },
+
     "metrics": [
       {
         "name": "hallucination",
@@ -58,7 +71,9 @@
     ],
     "temperature": 0
   },
+
   "execution": {
+    "test_case_limit":1,
     "request_timeout_seconds": 180,
     "retries": 1,
     "generator_concurrency": 3,

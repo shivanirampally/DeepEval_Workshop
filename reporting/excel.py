@@ -2,6 +2,8 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+
+import config
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
@@ -23,16 +25,17 @@ def _percent(value):
     return round(float(value) * 100, 1)
 
 
-def _metric_verdict(score, passed, threshold=0.90):
+def _metric_verdict(score, passed, metric=None):
     if score is None:
         return "ERROR"
 
-    if passed:
+    thresholds = config.METRIC_THRESHOLDS.get(
+        metric, {"pass": 0.80, "review": 0.60}
+    )
+    if float(score) >= thresholds["pass"]:
         return "PASS"
-
-    if float(score) >= 0.70:
+    if float(score) >= thresholds["review"]:
         return "REVIEW"
-
     return "FAIL"
 
 
@@ -41,26 +44,22 @@ def _metric_interpretation(metric, score, passed):
         return "Metric evaluation did not complete."
 
     percent = _percent(score)
-
-    if metric == "hallucination":
-        if passed:
-            return (
-                f"{percent}% hallucination evaluation score - passed the "
-                "0.90 quality threshold."
-            )
-        return (
-            f"{percent}% hallucination evaluation score - below the "
-            "0.90 quality threshold. Review the judge reason and response "
-            "for unsupported claims."
-        )
+    thresholds = config.METRIC_THRESHOLDS.get(
+        metric, {"pass": 0.80, "review": 0.60}
+    )
+    pass_threshold = thresholds["pass"]
+    review_threshold = thresholds["review"]
 
     if passed:
-        return f"{percent}% evaluation score - passed the 0.90 quality threshold."
+        return (
+            f"{percent}% evaluation score - passed the "
+            f"{pass_threshold:.2f} quality threshold."
+        )
 
-    if float(score) >= 0.70:
+    if float(score) >= review_threshold:
         return (
             f"{percent}% evaluation score - in the REVIEW band "
-            "(0.70 to <0.90)."
+            f"({review_threshold:.2f} to <{pass_threshold:.2f})."
         )
 
     return (
@@ -123,7 +122,6 @@ def save_report(
     detail_rows,
     failures,
     configuration,
-    judge_rows,
     report_root,
 ):
     now = datetime.now()
@@ -196,7 +194,6 @@ def save_report(
             "Testcases Passed",
             "Testcases Failed",
             "Quality Gate",
-            "Judge Agreement (%)",
         ]
     )
     ws.append(headers)
@@ -231,7 +228,7 @@ def save_report(
             row.extend(
                 [
                     _percent(score),
-                    _metric_verdict(score, passed),
+                    _metric_verdict(score, passed, metric),
                 ]
             )
 
@@ -251,7 +248,6 @@ def save_report(
                 passed_count,
                 failed_count,
                 generator_summary.get("quality_gate", ""),
-                _percent(generator_summary.get("judge_agreement")),
             ]
         )
 
@@ -273,7 +269,9 @@ def save_report(
             if score_column in testcase_frame.columns:
                 ordered_columns.append(score_column)
 
-        if "is_testcase_passed" in testcase_frame.columns:
+        if "testcase_verdict" in testcase_frame.columns:
+            ordered_columns.append("testcase_verdict")
+        elif "is_testcase_passed" in testcase_frame.columns:
             ordered_columns.append("is_testcase_passed")
 
         testcase_frame = testcase_frame[
@@ -283,6 +281,7 @@ def save_report(
         rename_map = {
             "generator": "Generator",
             "test_id": "Test Case",
+            "testcase_verdict": "Testcase Gate",
             "is_testcase_passed": "Testcase Gate",
         }
 
@@ -297,9 +296,10 @@ def save_report(
             if column.endswith("Score (%)"):
                 testcase_frame[column] = testcase_frame[column].apply(_percent)
 
-        testcase_frame["Testcase Gate"] = testcase_frame[
-            "Testcase Gate"
-        ].map({True: "PASS", False: "FAIL"})
+        if "Testcase Gate" in testcase_frame.columns and testcase_frame["Testcase Gate"].dtype == bool:
+            testcase_frame["Testcase Gate"] = testcase_frame[
+                "Testcase Gate"
+            ].map({True: "PASS", False: "FAIL"})
 
         _write_dataframe(ws, testcase_frame)
     else:
@@ -345,7 +345,7 @@ def save_report(
                 item.get("test_id", ""),
                 METRIC_DISPLAY_NAMES.get(metric, item.get("metric", "")),
                 _percent(score),
-                _metric_verdict(score, passed),
+                _metric_verdict(score, passed, metric),
                 "PASS" if passed else "FAIL",
                 gap_to_ideal,
                 item.get("reason", ""),
@@ -387,7 +387,7 @@ def save_report(
                     item.get("metric", ""),
                 ),
                 _percent(score),
-                _metric_verdict(score, passed),
+                _metric_verdict(score, passed, metric),
                 item.get("reason", ""),
             ]
         )
@@ -408,48 +408,20 @@ def save_report(
         [
             "Reporting rule",
             "Individual metric scores are displayed as percentages. "
-            "PASS means the score meets the 0.90 quality threshold. "
-            "REVIEW means 0.70 to <0.90. FAIL means <0.70.",
+            "Each metric uses its configured PASS and REVIEW thresholds.",
         ]
     )
     ws.append(
         [
             "Testcase rule",
-            "A testcase passes only when every configured metric passes "
-            "the quality threshold.",
+            "Overall weighted score >= 0.80 is PASS; 0.60 to <0.80 is "
+            "REVIEW; below 0.60 is FAIL. Hallucination, Faithfulness and "
+            "Correctness must not fall below their REVIEW thresholds.",
         ]
     )
 
     _format_sheet(ws)
 
-    # ---------------------------------------------------------
-    # Judge Comparison
-    # ---------------------------------------------------------
-    ws = workbook.create_sheet("Judge Comparison")
-
-    if judge_rows:
-        judge_frame = pd.DataFrame(judge_rows)
-
-        if "average_score" in judge_frame.columns:
-            judge_frame["average_score"] = judge_frame[
-                "average_score"
-            ].apply(_percent)
-
-        judge_frame.rename(
-            columns={
-                "generator": "Generator",
-                "judge": "Judge",
-                "metric": "Metric",
-                "average_score": "Average Score (%)",
-            },
-            inplace=True,
-        )
-
-        _write_dataframe(ws, judge_frame)
-    else:
-        ws.append(["No judge comparison data"])
-
-    _format_sheet(ws)
 
     workbook.save(file_path)
 

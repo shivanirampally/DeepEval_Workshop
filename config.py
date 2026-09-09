@@ -7,6 +7,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+os.environ.setdefault("DEEPEVAL_VERBOSE_MODE", "0")
+os.environ.setdefault("LOG_LEVEL", "WARNING")
+
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "project_config.json"
 
@@ -44,24 +47,40 @@ JUDGE_CONCURRENCY = int(
 )
 
 RETRIES = int(os.getenv("RETRIES", CONFIG["execution"]["retries"]))
-TEMPERATURE = float(os.getenv("TEMPERATURE", CONFIG["evaluation"]["temperature"]))
+TEMPERATURE = float(
+    os.getenv("TEMPERATURE", CONFIG["evaluation"]["temperature"])
+)
 
 QUALITY_THRESHOLD = float(
-    os.getenv("QUALITY_THRESHOLD", CONFIG["evaluation"]["quality_threshold"])
+    os.getenv(
+        "QUALITY_THRESHOLD",
+        CONFIG["evaluation"]["quality_threshold"],
+    )
 )
 
 WARNING_THRESHOLD = float(
-    os.getenv("WARNING_THRESHOLD", CONFIG["evaluation"]["review_threshold"])
+    os.getenv(
+        "WARNING_THRESHOLD",
+        CONFIG["evaluation"]["review_threshold"],
+    )
 )
+
+TEST_CASE_LIMIT = int(CONFIG["execution"]["test_case_limit"])
+if TEST_CASE_LIMIT < 1:
+    raise ValueError("test_case_limit must be at least 1")
+
+METRIC_THRESHOLDS = CONFIG["evaluation"]["metric_thresholds"]
 
 PREFERRED_GENERATORS = CONFIG["models"]["generator_preferences"]
 PREFERRED_JUDGES = CONFIG["models"]["judge_preferences"]
 EXCLUDED_MODELS = tuple(CONFIG["models"]["excluded_patterns"])
+
 GENERATOR_COUNT = int(CONFIG["models"]["generator_count"])
 JUDGE_COUNT = int(CONFIG["models"]["judge_count"])
 
 METRIC_NAMES = tuple(
-    item["name"] for item in CONFIG["evaluation"]["metrics"]
+    item["name"]
+    for item in CONFIG["evaluation"]["metrics"]
 )
 
 METRIC_ROLES = {
@@ -86,7 +105,10 @@ def _name(model):
 
 
 def _usable(models):
-    excluded = tuple(value.lower() for value in EXCLUDED_MODELS)
+    excluded = tuple(
+        value.lower()
+        for value in EXCLUDED_MODELS
+    )
 
     return [
         model
@@ -99,14 +121,23 @@ def _usable(models):
     ]
 
 
-def _configured_matches(preferred, available, count, reserved=None):
+def _configured_matches(
+    preferred,
+    available,
+    count,
+    reserved=None,
+):
     reserved = set(reserved or [])
-    available_names = {_name(item) for item in available}
+    available_names = {
+        _name(item)
+        for item in available
+    }
 
     return [
         name
         for name in preferred
-        if name in available_names and name not in reserved
+        if name in available_names
+        and name not in reserved
     ][:count]
 
 
@@ -128,15 +159,17 @@ def discover_models():
 
     if len(generators) < GENERATOR_COUNT:
         raise RuntimeError(
-            f"Configured generator set requires {GENERATOR_COUNT} models, "
-            f"but only {len(generators)} are installed on the server."
+            f"Configured generator set requires "
+            f"{GENERATOR_COUNT} models, but only "
+            f"{len(generators)} are installed on the server."
         )
 
     if len(judges) < JUDGE_COUNT:
         raise RuntimeError(
-            "Cross-LLM validation requires two judge models that are "
-            f"different from the selected generators. "
-            f"Found {len(judges)} of {JUDGE_COUNT}."
+            f"Configured judge set requires "
+            f"{JUDGE_COUNT} model(s), but only "
+            f"{len(judges)} independent judge model(s) "
+            f"are available."
         )
 
     return {
@@ -146,7 +179,8 @@ def discover_models():
             {
                 "name": _name(item),
                 "size_gb": round(
-                    float(item.get("size", 0)) / (1024**3),
+                    float(item.get("size", 0))
+                    / (1024**3),
                     2,
                 ),
             }
