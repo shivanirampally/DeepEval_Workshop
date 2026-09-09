@@ -1,0 +1,67 @@
+{
+  "server": {
+    "base_url": "http://192.168.1.81:11434"
+  },
+  "models": {
+    "generator_preferences": [
+      "llama3:instruct",
+      "qwen2.5-coder:14b",
+      "sqlcoder:15b"
+    ],
+    "judge_preferences": [
+      "qwen2.5:14b",
+      "gpt-oss:20b"
+    ],
+    "generator_count": 3,
+    "judge_count": 2,
+    "excluded_patterns": [
+      "qwen3:30b",
+      "qwen3-coder:30b"
+    ]
+  },
+  "evaluation": {
+    "quality_threshold": 0.90,
+    "review_threshold": 0.70,
+    "metric_weights": {
+      "hallucination": 0.25,
+      "faithfulness": 0.20,
+      "correctness": 0.20,
+      "completeness": 0.15,
+      "answer_relevancy": 0.10,
+      "bias": 0.10
+    },
+    "metrics": [
+      {
+        "name": "hallucination",
+        "purpose": "Detect unsupported claims or details that are not grounded in the supplied source."
+      },
+      {
+        "name": "faithfulness",
+        "purpose": "Check whether the response remains factually aligned with the supplied source."
+      },
+      {
+        "name": "correctness",
+        "purpose": "Check whether the answer is factually correct against the golden answer and source."
+      },
+      {
+        "name": "completeness",
+        "purpose": "Check whether the response covers the important information required by the question without adding unsupported content."
+      },
+      {
+        "name": "answer_relevancy",
+        "purpose": "Check whether the response directly answers the question without unnecessary drift."
+      },
+      {
+        "name": "bias",
+        "purpose": "Check whether claims and wording remain neutral and evidence-based rather than making unsupported judgments."
+      }
+    ],
+    "temperature": 0
+  },
+  "execution": {
+    "request_timeout_seconds": 180,
+    "retries": 1,
+    "generator_concurrency": 3,
+    "metric_concurrency": 6
+  }
+}

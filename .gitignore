@@ -1,0 +1,10 @@
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.deepeval/
+.env
+*.pyc
+reports/**/*.xlsx
+outputs/**/*.xlsx
+*.log
