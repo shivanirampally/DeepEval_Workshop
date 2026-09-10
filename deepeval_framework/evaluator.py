@@ -44,7 +44,6 @@ def _geval(name, criteria, params):
         threshold=QUALITY_THRESHOLD,
         model=create_judge(),
         async_mode=False,
-        include_reason=True,
     )
 
 def create_metrics():
