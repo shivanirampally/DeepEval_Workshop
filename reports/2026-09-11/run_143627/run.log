@@ -1,0 +1,172 @@
+14:36:28 | INFO | [1/8 V1] Baseline evaluation started - STARTED
+14:36:28 | INFO | [V1] Generating 1 responses...
+14:36:33 | INFO | [V1] Generation complete.
+14:36:33 | INFO | [V1] Evaluating T001...
+14:37:23 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:37:25 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:37:27 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:37:30 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:37:33 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:37:33 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:38:27 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:38:28 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:38:30 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:38:32 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:38:35 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:38:36 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:38:44 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:38:45 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:38:49 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:38:49 | INFO | [V1] DeepEval evaluation complete. Metric results=6, non-completed=0.
+14:38:49 | INFO | [1/8 V1] Baseline evaluation completed - DONE
+14:38:50 | INFO | [2/8 Analysis] Failure analysis started - STARTED
+14:38:50 | INFO | [2/8 Analysis] Failure analysis completed - DONE
+14:39:10 | INFO | [HUMAN] Failure Analysis - APPROVED
+14:39:10 | INFO | [3/8 Synthesis] Generating targeted synthetic data - STARTED
+14:39:19 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:39:27 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:39:37 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:39:44 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:40:09 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:40:15 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:40:25 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:40:39 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:40:42 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:40:43 | INFO | [3/8 Synthesis] Targeted synthetic data generated - DONE
+14:41:54 | INFO | [HUMAN] Synthetic Data - APPROVED
+14:41:54 | INFO | [4/8 Synthetic V1] Validating V1 on synthetic data - STARTED
+14:41:54 | INFO | [Synthetic V1] Generating 1 responses...
+14:42:03 | INFO | [Synthetic V1] Generation complete.
+14:42:03 | INFO | [Synthetic V1] Evaluating SYN001...
+14:42:52 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:42:55 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:42:58 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:42:59 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:43:01 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:43:03 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:43:51 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:43:54 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:43:57 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:43:59 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:44:00 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:44:01 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:44:32 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:44:34 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:44:37 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+14:44:37 | INFO | [Synthetic V1] DeepEval evaluation complete. Metric results=6, non-completed=0.
+14:44:37 | INFO | [4/8 Synthetic V1] Synthetic V1 validation completed - DONE
+14:44:37 | INFO | [5/8 Optimizer] Generating candidate V2 prompt - STARTED
+14:44:37 | ERROR | Lifecycle stopped unexpectedly: KeyError: 'source'
+Traceback (most recent call last):
+  File "E:\AI-Work\Learning\deepeval-session\deepeval-lifecycle-component-evals\main.py", line 487, in run_lifecycle
+    v2_prompt = optimize_prompt(BASE_PROMPT, failures, synthetic_df, v2_prompt_path)
+  File "E:\AI-Work\Learning\deepeval-session\deepeval-lifecycle-component-evals\prompt_optimizer.py", line 14, in optimize_prompt
+    prompt = OPTIMIZER_PROMPT.format(
+        original_prompt=original_prompt,
+        failure_analysis=failure_text or "No repeated failure pattern was identified.",
+        synthetic_context=synthetic_text,
+    )
+KeyError: 'source'
+14:44:38 | WARNING | [PostHog] analytics lane received event Evaluation after shutdown, dropping it
+15:00:57 | INFO | [1/8 V1] Baseline evaluation started - STARTED
+15:00:57 | INFO | [V1] Generating 1 responses...
+15:01:02 | INFO | [V1] Generation complete.
+15:01:02 | INFO | [V1] Evaluating T001...
+15:01:56 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:01:57 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:02:00 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:02:02 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:02:04 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:02:06 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:02:54 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:02:55 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:02:58 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:02:59 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:03:01 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:03:02 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:03:12 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:03:13 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:03:17 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:03:17 | INFO | [V1] DeepEval evaluation complete. Metric results=6, non-completed=0.
+15:03:17 | INFO | [1/8 V1] Baseline evaluation completed - DONE
+15:03:17 | INFO | [2/8 Analysis] Failure analysis started - STARTED
+15:03:17 | INFO | [2/8 Analysis] Failure analysis completed - DONE
+15:10:09 | INFO | [HUMAN] Failure Analysis - APPROVED
+15:10:09 | INFO | [3/8 Synthesis] Generating targeted synthetic data - STARTED
+15:10:26 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:10:48 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:11:08 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:11:14 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:11:33 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:11:37 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:11:38 | INFO | [3/8 Synthesis] Targeted synthetic data generated - DONE
+15:11:43 | INFO | [HUMAN] Synthetic Data - APPROVED
+15:11:43 | INFO | [4/8 Synthetic V1] Validating V1 on synthetic data - STARTED
+15:11:43 | INFO | [Synthetic V1] Generating 1 responses...
+15:11:47 | INFO | [Synthetic V1] Generation complete.
+15:11:47 | INFO | [Synthetic V1] Evaluating SYN001...
+15:12:35 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:12:38 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:12:41 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:12:42 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:12:45 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:12:45 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:13:24 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:13:27 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:13:29 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:13:30 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:13:31 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:13:32 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:13:40 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:13:41 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:13:45 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:13:45 | INFO | [Synthetic V1] DeepEval evaluation complete. Metric results=6, non-completed=0.
+15:13:45 | INFO | [4/8 Synthetic V1] Synthetic V1 validation completed - DONE
+15:13:45 | INFO | [5/8 Optimizer] Generating candidate V2 prompt - STARTED
+15:14:08 | INFO | [5/8 Optimizer] Candidate V2 prompt generated - DONE
+15:15:08 | INFO | [HUMAN] V2 Prompt - APPROVED
+15:15:08 | INFO | [6/8 V2] Running approved V2 prompt - STARTED
+15:15:08 | INFO | [V2] Generating 1 responses...
+15:15:15 | INFO | [V2] Generation complete.
+15:15:15 | INFO | [V2] Evaluating T001...
+15:16:01 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:16:05 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:16:06 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:16:08 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:16:09 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:16:12 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:17:00 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:17:02 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:17:03 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:17:05 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:17:06 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:17:09 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:17:16 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:17:17 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:17:21 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:17:21 | INFO | [V2] DeepEval evaluation complete. Metric results=6, non-completed=0.
+15:17:21 | INFO | [6/8 V2] V2 evaluation completed - DONE
+15:17:21 | INFO | [7/8 Synthetic V2] Validating V2 on synthetic data - STARTED
+15:17:22 | INFO | [Synthetic V2] Generating 1 responses...
+15:17:25 | INFO | [Synthetic V2] Generation complete.
+15:17:25 | INFO | [Synthetic V2] Evaluating SYN001...
+15:18:26 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:18:29 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:18:30 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:18:33 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:18:34 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:18:35 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:19:15 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:19:17 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:19:18 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:19:20 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:19:21 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:19:21 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:19:32 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:19:35 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:19:57 | INFO | HTTP Request: POST http://192.168.1.81:11434/api/chat "HTTP/1.1 200 OK"
+15:19:57 | INFO | [Synthetic V2] DeepEval evaluation complete. Metric results=6, non-completed=0.
+15:19:57 | INFO | [7/8 Synthetic V2] Synthetic V2 validation completed - DONE
+15:19:58 | INFO | [8/8 Comparison] Building V1 vs V2 comparison - STARTED
+15:20:00 | INFO | [8/8 Comparison] V1 vs V2 comparison completed - DONE
+15:20:01 | WARNING | [PostHog] analytics lane received event Evaluation after shutdown, dropping it

@@ -1,7 +1,5 @@
 import pandas as pd
-
 from analysis.failure_analysis import analyze, verdict
-
 
 def test_verdict_boundaries():
     assert verdict(0.95) == "PASS"
@@ -9,20 +7,13 @@ def test_verdict_boundaries():
     assert verdict(0.60) == "FAIL"
     assert verdict(None) == "ERROR"
 
-
-def test_failure_analysis_has_action():
-    details = pd.DataFrame([
-        {
-            "test_id": "TC01",
-            "metric": "hallucination",
-            "score": 0.60,
-            "passed": False,
-            "reason": "Unsupported claim.",
-        }
-    ])
-
+def test_failure_analysis_creates_action():
+    details = pd.DataFrame([{
+        "test_id": "T001", "metric": "correctness", "score": 0.60,
+        "passed": False, "status": "COMPLETED",
+        "reason": "Unsupported inference", "error": "",
+    }])
     failures, recommendations = analyze(details)
-
     assert len(failures) == 1
     assert failures.iloc[0]["recommended_action"]
-    assert recommendations[0]["Metric"] == "hallucination"
+    assert recommendations[0]["Metric"] == "correctness"

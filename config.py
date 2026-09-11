@@ -1,24 +1,32 @@
 from pathlib import Path
 import os
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 ROOT = Path(__file__).resolve().parent
+
 DATASET_PATH = ROOT / "dataset" / "hallucination_benchmark.xlsx"
-SYNTHETIC_DATA_PATH = ROOT / "dataset" / "synthetic_test_data.xlsx"
 REPORT_ROOT = ROOT / "reports"
+PROMPT_ROOT = ROOT / "prompts"
 
-OLLAMA_BASE_URL = os.getenv(
-    "OLLAMA_BASE_URL",
-    "http://192.168.1.81:11434",
-).rstrip("/")
+# LLM configuration
+OLLAMA_BASE_URL = "http://192.168.1.81:11434"
 
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT_SECONDS", "180"))
-TEMPERATURE = float(os.getenv("TEMPERATURE", "0"))
-GENERATOR_MODEL = os.getenv("GENERATOR_MODEL", "qwen2.5:14b")
-JUDGE_MODEL = os.getenv("JUDGE_MODEL", "gpt-oss:20b")
+GENERATOR_MODEL = "qwen2.5:14b"
+JUDGE_MODEL = "gpt-oss:20b"
+OPTIMIZER_MODEL = "gpt-oss:20b"
+
+REQUEST_TIMEOUT = 180
+TEMPERATURE = 0
+
+# POC control: one original testcase and one synthetic testcase
+# for the whole lifecycle.
+TEST_CASE_LIMIT = 1
+SYNTHETIC_TEST_CASE_COUNT = 1
+
+if TEST_CASE_LIMIT < 1:
+    raise ValueError("TEST_CASE_LIMIT must be at least 1.")
+
+if SYNTHETIC_TEST_CASE_COUNT < 1:
+    raise ValueError("SYNTHETIC_TEST_CASE_COUNT must be at least 1.")
 
 QUALITY_THRESHOLD = 0.90
 REVIEW_THRESHOLD = 0.70
@@ -31,3 +39,6 @@ METRIC_WEIGHTS = {
     "answer_relevancy": 0.10,
     "bias": 0.10,
 }
+
+os.environ.setdefault("DEEPEVAL_VERBOSE_MODE", "0")
+os.environ.setdefault("LOG_LEVEL", "WARNING")

@@ -1,9 +1,7 @@
 .venv/
-venv/
 __pycache__/
 .pytest_cache/
 .deepeval/
-.env
+*.log
 *.pyc
-reports/**/*.xlsx
-outputs/**/*.xlsx
+.env

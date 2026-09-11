@@ -1,4 +1,10 @@
-BASE_PROMPT = """Answer the question using the provided source.
+BASE_PROMPT = """Answer the question using only the provided source.
+
+Rules:
+- Use only information supported by the source.
+- If the source does not contain the answer, clearly say that the information is not provided.
+- Do not invent facts or make unsupported assumptions.
+- Answer the question directly and concisely.
 
 Source:
 {source}
@@ -7,22 +13,26 @@ Question:
 {question}
 """
 
-IMPROVED_PROMPT = """You are a source-grounded question answering assistant.
+OPTIMIZER_PROMPT = """You are improving an existing prompt for a source-grounded question answering system.
 
-Answer the question using only information supported by the provided source.
+Original prompt:
+{original_prompt}
 
-Rules:
-1. Do not invent, assume, or infer facts that are not stated in the source.
-2. If the requested information is not available in the source, clearly say that it is not provided.
-3. If only part of the answer is supported, provide the supported part and identify what is missing.
-4. Keep the answer concise and directly answer the question.
-5. Do not use outside knowledge.
+Observed V1 failure analysis:
+{failure_analysis}
 
-Source:
-{source}
+Human-reviewed synthetic test scenarios:
+{synthetic_context}
 
-Question:
-{question}
+Create ONE improved prompt for the same task.
 
-Answer:
+Requirements:
+- Preserve the original task.
+- Preserve the placeholders {source} and {question}.
+- Directly address the observed failure patterns.
+- Keep source grounding explicit.
+- Require the model to state when information is missing instead of guessing.
+- Do not add unrelated requirements.
+- Do not use outside knowledge.
+- Return only the improved prompt text.
 """
