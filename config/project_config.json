@@ -39,11 +39,11 @@
   },
   "execution": {
     "request_timeout_seconds": 180,
-    "retries": 1
+    "retries": 1,
+    "test_case_limit": 1
   },
-  "project_1_report_root": "../project_1_multi_generator/reports",
+  "project_1_report_root": "../multigenerators-e2e_evals/reports",
   "workflow": {
     "prompt_template": "Answer the question using only the source. Do not guess or add unsupported facts.\n\nSource: {source}\nQuestion: {question}",
-    "selection_policy": "Run the same three generators used by Project 1, record every output, then select the generator preferred by Project 1 when that report is available. This validates whether the trajectory reaches the same model-selection outcome."
-  }
+    "selection_policy": "Plan: 1. Run llama3:instruct against the supplied source and question. 2. Run qwen2.5-coder:14b against the supplied source and question. 3. Run sqlcoder:15b against the supplied source and question. 4. Compare the three generator outputs. 5. Select the generator preferred by Project 1. 6. Return the selected generator response."    }
 }
