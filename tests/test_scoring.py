@@ -29,3 +29,22 @@ def test_weighted_score_is_between_zero_and_one():
         )
     }
     assert weighted_score(result) == 0.9
+
+
+def test_weighted_score_is_none_when_any_metric_is_missing():
+    # A rate-limited/errored metric must invalidate the score rather than
+    # silently re-normalizing over only the metrics that completed - a
+    # partial evaluation should never report a fabricated "perfect" score.
+    result = {
+        name: {"score": 0.9}
+        for name in (
+            "hallucination",
+            "faithfulness",
+            "correctness",
+            "completeness",
+            "answer_relevancy",
+        )
+    }
+    result["bias"] = {"score": None}
+
+    assert weighted_score(result) is None

@@ -1,20 +1,51 @@
 # Project - Multi Generator Cross-LLM Evaluation
-This project sends the same benchmark question, source context and evaluation prompt to three different Ollama generator models. Their responses are then evaluated using the same DeepEval metrics and two independent judge models.
+This project sends the same benchmark question, source context and evaluation prompt to three different Ollama generator models. Their responses are then evaluated using the same DeepEval metrics and a single independent judge model.
 
 The purpose is to compare generator quality under the same conditions rather than allowing each model to use a different test or evaluation process.
 
 ## Model roles
 Generators:
-llama3:instruct -   general-purpose baseline
-qwen2.5-coder:14b - code-oriented candidate
-sqlcoder:15b -      SQL-oriented candidate
+llama3:instruct -    general-purpose baseline
+qwen2.5-coder:14b -  code-oriented candidate, verified to answer general QA cleanly
+gpt-oss:20b -        general-purpose candidate
+
+sqlcoder:15b was removed as a generator: it is fine-tuned to emit SQL/tables and
+produced ungrounded table output on theoretical (non-SQL) questions, which both
+lowered quality scores and added latency.
 
 Each generator receives the same 10 benchmark test cases.
 
-Judges:
-gpt-oss:20b
+Judge:
+qwen3-coder:30b
 
-The judge models are intentionally different from the selected generators. This provides an independent cross-LLM evaluation instead of allowing a generator to grade its own output.
+The judge was moved from gpt-oss:20b to qwen3-coder:30b: benchmarking showed
+qwen3-coder:30b responds faster under the same conditions while remaining a
+fully independent model family from all three generators (llama, qwen2,
+gptoss vs. judge family qwen3moe).
+
+The judge model is intentionally different from the selected generators. This provides an independent cross-LLM evaluation instead of allowing a generator to grade its own output.
+
+### Optional: hosted judge (Gemini or Anthropic)
+The Ollama judge above is serialized by the local server (it accepts one
+request at a time), which is the dominant cost in every run. As an
+alternative that avoids that bottleneck entirely, the judge can be pointed
+at a hosted Gemini or Anthropic model instead of a local Ollama model:
+
+1. Set `models.judge_provider` in `project_config.json` to `"gemini"` or
+   `"anthropic"` (default: `"ollama"`). The model used is
+   `models.gemini_judge_model` (default: `gemini-3.6-flash`) or
+   `models.anthropic_judge_model` (default: `claude-haiku-4-5-20251001`).
+2. Copy `.env.example` to `.env` and set `GOOGLE_API_KEY` and/or
+   `ANTHROPIC_API_KEY`. Never paste API keys into a chat/AI assistant -
+   add them to `.env` directly and only confirm they're present.
+
+Generators stay on the local Ollama server either way - only the judge
+moves. This trades local/offline evaluation for real request concurrency
+(hosted APIs are not limited to one in-flight request), at the cost of a
+per-call API fee and sending source/question/response text to the provider.
+Gemini's free tier is rate-limited to a handful of requests/minute, which
+is too slow for this project's call volume (~40 judge calls per test case)
+- a paid tier is required for it to be worth using over Ollama.
 
 ## Evaluation approach
 For every test case:
@@ -32,13 +63,10 @@ Same Question + Same Source + Same Prompt
                     v
              Generated Responses
                     |
-        +-----------+-----------+
-        |                       |
-      Judge 1                 Judge 2
-        |                       |
-    6 metrics               6 metrics
-        |                       |
-        +-----------+-----------+
+                    v
+                  Judge
+                    |
+                6 metrics
                     |
                     v
              Quality Gate
@@ -55,7 +83,7 @@ same source context
 same prompt
 same metric set
 same thresholds
-independent judges
+independent judge
 
 ## Metrics:
 Metric	Purpose:
@@ -95,9 +123,9 @@ The detailed report also contains the judge's reason so the reviewer can identif
 < 0.70 → metric FAIL
 
 A testcase passes only when every configured metric meets the 0.90 threshold.
-Both judges evaluate the same generated response.
+The judge evaluates every generated response.
 
-The generator recommendation considers the quality gate first, followed by weighted semantic score, testcase pass rate and cross-judge agreement.
+The generator recommendation considers the quality gate first, followed by weighted semantic score and testcase pass rate.
 
 If the leading generators are too close to distinguish reliably, the report returns:
 
@@ -120,7 +148,6 @@ Testcase Comparison — testcase-level metric scores and testcase quality gate
 Detailed Metric Reasons — score, threshold result, gap to ideal, judge reason and technical status
 Failures — metrics/testcases that require attention
 Configuration — models, thresholds and execution settings
-Judge Comparison — comparison of the two independent judges
 
 # Run
 Activate the project environment: .\.venv\Scripts\Activate.ps1

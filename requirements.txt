@@ -6,3 +6,9 @@ requests==2.33.1
 portalocker==3.2.0
 python-dotenv==1.2.2
 pytest==9.0.2
+google-genai==2.23.0
+# Pinned below deepeval==4.2.0's expected API: anthropic>=1.0.0 replaced the
+# `temperature` request parameter with an `effort`-based control, which
+# breaks deepeval's AnthropicModel.generate() (confirmed via live test:
+# "Messages.create() got an unexpected keyword argument 'temperature'").
+anthropic==0.125.0

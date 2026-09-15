@@ -15,9 +15,17 @@ def weighted_score(metric_results):
     for name, weight in METRIC_WEIGHTS.items():
         value = metric_results.get(name, {}).get("score")
 
-        if value is not None:
-            values.append(value * weight)
-            weights.append(weight)
+        if value is None:
+            # A missing/errored metric invalidates the weighted score.
+            # Silently re-normalizing over only the metrics that happened
+            # to complete would let a partially-failed evaluation (e.g. a
+            # rate-limited judge) report a misleadingly high - even a
+            # fabricated "perfect" - score instead of surfacing that the
+            # evaluation was incomplete.
+            return None
+
+        values.append(value * weight)
+        weights.append(weight)
 
     if not weights:
         return None

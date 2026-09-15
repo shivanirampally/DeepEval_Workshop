@@ -325,6 +325,7 @@ def save_report(
         "Status",
         "Error",
         "Interpretation",
+        "Duration (s)",
     ]
     ws.append(detail_headers)
 
@@ -352,6 +353,7 @@ def save_report(
                 item.get("status", ""),
                 item.get("error", ""),
                 _metric_interpretation(metric, score, passed),
+                item.get("duration_seconds", ""),
             ]
         )
 
@@ -374,6 +376,7 @@ def save_report(
     ws.append(failure_headers)
 
     for item in failures:
+        metric = str(item.get("metric", "")).lower()
         score = item.get("score")
         passed = False
 
@@ -382,10 +385,7 @@ def save_report(
                 item.get("generator", ""),
                 item.get("judge", ""),
                 item.get("test_id", ""),
-                METRIC_DISPLAY_NAMES.get(
-                    str(item.get("metric", "")).lower(),
-                    item.get("metric", ""),
-                ),
+                METRIC_DISPLAY_NAMES.get(metric, item.get("metric", "")),
                 _percent(score),
                 _metric_verdict(score, passed, metric),
                 item.get("reason", ""),

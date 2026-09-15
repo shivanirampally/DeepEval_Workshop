@@ -1,12 +1,25 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+import sys
+import time
 
 import pandas as pd
 
 import config
+
+# Windows defaults stdout/stderr to the legacy cp1252 codec whenever they
+# are not attached to an interactive console (redirected to a file/pipe,
+# as in CI or `python main.py > log.txt`). That codec cannot encode the
+# U+2713/U+2717 progress markers used below, which crashes the print
+# call itself - including inside the exception handler meant to report
+# that same failure. Forcing UTF-8 here makes console output encoding-safe
+# in every invocation context.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
 from analysis.recommendation import improvement_suggestions, recommend
 from config import discover_models
-from deepeval_framework.evaluation import evaluate_one
+from deepeval_framework.evaluation import TruthsCache, evaluate_one
 from deepeval_framework.scoring import testcase_verdict, weighted_score
 from generators.ollama_client import OllamaClient
 from reporting.excel import save_generator_responses, save_report
@@ -137,111 +150,157 @@ def generate_responses(models, dataset, prompt):
     return responses
 
 
-def evaluate_generators(models, judge, responses, dataset):
-    source_by_id = {
-        str(row["Test_ID"]): row for _, row in dataset.iterrows()
-    }
+def evaluate_one_generator(model, judge, responses, source_by_id, truths_cache):
     detail_rows = []
     failures = []
-    summaries = []
     testcase_rows = []
+    model_scores = []
 
-    for model_index, model in enumerate(models, start=1):
-        print(f"\n[{model_index}/{len(models)}] Evaluating {model}")
-        model_scores = []
-        model_testcase_rows = []
+    for test_index, response in enumerate(responses[model], start=1):
+        test_id = str(response["test_id"])
+        metrics = evaluate_one(
+            response,
+            source_by_id[test_id],
+            judge,
+            config.OLLAMA_BASE_URL,
+            truths_cache,
+        )
+        score = weighted_score(metrics)
+        verdict = testcase_verdict(metrics)
 
-        for test_index, response in enumerate(responses[model], start=1):
-            test_id = str(response["test_id"])
-            metrics = evaluate_one(
-                response,
-                source_by_id[test_id],
-                judge,
-                config.OLLAMA_BASE_URL,
-            )
-            score = weighted_score(metrics)
-            verdict = testcase_verdict(metrics)
-
-            for name, result in metrics.items():
-                detail_rows.append({
+        for name, result in metrics.items():
+            detail_rows.append({
+                "generator": model,
+                "judge": judge,
+                "test_id": test_id,
+                "metric": name,
+                "score": result["score"],
+                "verdict": result["verdict"],
+                "passed": result["passed"],
+                "status": result["status"],
+                "reason": result["reason"],
+                "error": result["error"],
+                "duration_seconds": result["duration_seconds"],
+            })
+            if (
+                result["status"] != "COMPLETED"
+                or result["verdict"] != "PASS"
+            ):
+                failures.append({
                     "generator": model,
                     "judge": judge,
                     "test_id": test_id,
                     "metric": name,
                     "score": result["score"],
                     "verdict": result["verdict"],
-                    "passed": result["passed"],
-                    "status": result["status"],
                     "reason": result["reason"],
-                    "error": result["error"],
                 })
-                if (
-                    result["status"] != "COMPLETED"
-                    or result["verdict"] != "PASS"
-                ):
-                    failures.append({
-                        "generator": model,
-                        "judge": judge,
-                        "test_id": test_id,
-                        "metric": name,
-                        "score": result["score"],
-                        "verdict": result["verdict"],
-                        "reason": result["reason"],
-                    })
 
-            testcase_row = {
-                "generator": model,
-                "test_id": test_id,
-                "testcase_verdict": verdict,
-                **{
-                    f"{name}_score": result["score"]
-                    for name, result in metrics.items()
-                },
-            }
-            testcase_rows.append(testcase_row)
-            model_testcase_rows.append(testcase_row)
-            model_scores.append(score)
-
-            print(
-                f"    [{test_index}/{len(responses[model])}] "
-                f"{test_id}: {verdict}"
-            )
-
-        valid_scores = [score for score in model_scores if score is not None]
-        metric_scores = {}
-        for name in config.METRIC_NAMES:
-            values = [
-                row["score"]
-                for row in detail_rows
-                if row["generator"] == model
-                and row["metric"] == name
-                and row["score"] is not None
-            ]
-            if values:
-                metric_scores[name] = sum(values) / len(values)
-
-        summaries.append({
+        testcase_row = {
             "generator": model,
-            "overall_score": (
-                round(sum(valid_scores) / len(valid_scores), 4)
-                if valid_scores else None
-            ),
-            "passed_testcases": sum(
-                row["testcase_verdict"] == "PASS"
-                for row in model_testcase_rows
-            ),
-            "total_testcases": len(model_testcase_rows),
-            "quality_gate": (
-                "PASS"
-                if model_testcase_rows
-                and all(
-                    row["testcase_verdict"] == "PASS"
-                    for row in model_testcase_rows
+            "test_id": test_id,
+            "testcase_verdict": verdict,
+            **{
+                f"{name}_score": result["score"]
+                for name, result in metrics.items()
+            },
+        }
+        testcase_rows.append(testcase_row)
+        model_scores.append(score)
+
+        print(
+            f"    [{model}] [{test_index}/{len(responses[model])}] "
+            f"{test_id}: {verdict}"
+        )
+
+    valid_scores = [score for score in model_scores if score is not None]
+    metric_scores = {}
+    for name in config.METRIC_NAMES:
+        values = [
+            row["score"]
+            for row in detail_rows
+            if row["metric"] == name and row["score"] is not None
+        ]
+        if values:
+            metric_scores[name] = sum(values) / len(values)
+
+    summary = {
+        "generator": model,
+        "overall_score": (
+            round(sum(valid_scores) / len(valid_scores), 4)
+            if valid_scores else None
+        ),
+        "passed_testcases": sum(
+            row["testcase_verdict"] == "PASS" for row in testcase_rows
+        ),
+        "total_testcases": len(testcase_rows),
+        "quality_gate": (
+            "PASS"
+            if testcase_rows
+            and all(
+                row["testcase_verdict"] == "PASS" for row in testcase_rows
+            )
+            else "FAIL"
+        ),
+        "metric_scores": metric_scores,
+    }
+
+    return {
+        "summary": summary,
+        "testcase_rows": testcase_rows,
+        "detail_rows": detail_rows,
+        "failures": failures,
+    }
+
+
+def evaluate_generators(models, judge, responses, dataset):
+    source_by_id = {
+        str(row["Test_ID"]): row for _, row in dataset.iterrows()
+    }
+    # Truths extraction only depends on the shared source context, not on
+    # which generator produced the answer, so it is cached once per test_id
+    # and reused across generators instead of being recomputed for each one.
+    truths_cache = TruthsCache()
+
+    detail_rows = []
+    failures = []
+    summaries = []
+    testcase_rows = []
+
+    workers = min(config.EVALUATION_CONCURRENCY, len(models))
+    print(f"Evaluation : {workers} generators in parallel (judge={judge})")
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(
+                evaluate_one_generator,
+                model,
+                judge,
+                responses,
+                source_by_id,
+                truths_cache,
+            ): model
+            for model in models
+        }
+
+        for future in as_completed(futures):
+            model = futures[future]
+            try:
+                result = future.result()
+                summaries.append(result["summary"])
+                testcase_rows.extend(result["testcase_rows"])
+                detail_rows.extend(result["detail_rows"])
+                failures.extend(result["failures"])
+                print(
+                    f"  ✓ {model}: "
+                    f"{result['summary']['passed_testcases']}/"
+                    f"{result['summary']['total_testcases']} "
+                    "testcases passed"
                 )
-                else "FAIL"
-            ),
-            "metric_scores": metric_scores,
-        })
+            except Exception as exc:
+                error = f"{type(exc).__name__}: {exc}"
+                print(f"  ✗ {model}: evaluation failed - {error}")
+                raise
 
     return {
         "summary": summaries,
@@ -307,6 +366,7 @@ def build_configuration(discovered):
         {"key": "Ollama Base URL", "value": config.OLLAMA_BASE_URL},
         {"key": "Temperature", "value": config.TEMPERATURE},
         {"key": "Generators", "value": ", ".join(discovered["generators"])},
+        {"key": "Judge Provider", "value": config.JUDGE_PROVIDER},
         {"key": "Judge", "value": ", ".join(discovered["judges"])},
         {"key": "Generator Concurrency", "value": config.GENERATOR_CONCURRENCY},
         {"key": "Metric Concurrency", "value": config.JUDGE_CONCURRENCY},
@@ -323,23 +383,61 @@ def build_configuration(discovered):
     ]
 
 
+def summarize_metric_durations(detail_rows):
+    durations = {}
+    for row in detail_rows:
+        duration = row.get("duration_seconds")
+        if isinstance(duration, (int, float)):
+            durations.setdefault(row["metric"], []).append(duration)
+
+    return {
+        name: round(sum(values) / len(values), 2)
+        for name, values in durations.items()
+    }
+
+
+def print_timing_report(phase_timings, metric_durations):
+    print("\n" + "=" * 60)
+    print("Timing Report")
+    print("=" * 60)
+    for label, seconds in phase_timings.items():
+        print(f"  {label:<24}: {seconds:>8.2f}s")
+
+    if metric_durations:
+        print("\n  Avg time per metric call (judge LLM call time):")
+        for name, seconds in sorted(
+            metric_durations.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        ):
+            print(f"    {name:<20}: {seconds:>6.2f}s")
+    print("=" * 60)
+
+
 def main():
+    run_started = time.perf_counter()
+    phase_timings = {}
+
     try:
         print("=" * 60)
         print("DeepEval Multi-Generator Evaluation")
         print("=" * 60)
 
+        phase_started = time.perf_counter()
         print("Discovering Ollama models...")
         discovered = discover_models()
         models = discovered["generators"]
         judge = discovered["judges"][0]
+        phase_timings["Model discovery"] = time.perf_counter() - phase_started
 
         print("Generators : " + ", ".join(models))
         print("Judge      : " + judge)
         print(f"Test cases : loading from {config.DATASET_PATH.name}")
 
+        phase_started = time.perf_counter()
         dataset = load_dataset()
         prompt = load_prompt()
+        phase_timings["Dataset load"] = time.perf_counter() - phase_started
 
         print(
             f"Test cases : {len(dataset)} "
@@ -347,18 +445,24 @@ def main():
         )
         print(f"Temperature: {config.TEMPERATURE}")
 
+        phase_started = time.perf_counter()
         responses = generate_responses(models, dataset, prompt)
         response_file = save_generator_responses(
             responses, config.RESPONSE_ROOT
         )
+        phase_timings["Generation phase"] = time.perf_counter() - phase_started
         print(f"Generator workbook: {response_file}")
 
+        phase_started = time.perf_counter()
         results = evaluate_generators(
             models, judge, responses, dataset
         )
+        phase_timings["Evaluation phase"] = time.perf_counter() - phase_started
+
         verdict = recommend(results["summary"])
         suggestions = improvement_suggestions(results["failures"])
 
+        phase_started = time.perf_counter()
         report_file = save_report(
             build_summary(verdict, suggestions, results["summary"]),
             results["testcase_rows"],
@@ -367,6 +471,8 @@ def main():
             build_configuration(discovered),
             config.REPORT_ROOT,
         )
+        phase_timings["Report generation"] = time.perf_counter() - phase_started
+        phase_timings["Total run time"] = time.perf_counter() - run_started
 
         print("\n" + "=" * 60)
         print("Evaluation Complete")
@@ -374,6 +480,11 @@ def main():
         print(f"Final report: {report_file}")
         print(verdict)
         print("=" * 60)
+
+        print_timing_report(
+            phase_timings,
+            summarize_metric_durations(results["detail_rows"]),
+        )
 
     except Exception as exc:
         print("\n" + "=" * 60)

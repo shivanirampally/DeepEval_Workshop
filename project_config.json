@@ -7,19 +7,22 @@
     "generator_preferences": [
       "llama3:instruct",
       "qwen2.5-coder:14b",
-      "sqlcoder:15b"
+      "gpt-oss:20b"
     ],
 
     "judge_preferences": [
-      "gpt-oss:20b"
+      "qwen3-coder:30b"
     ],
 
     "generator_count": 3,
     "judge_count": 1,
     "excluded_patterns": [
-      "qwen3:30b",
-      "qwen3-coder:30b"
-    ]
+      "qwen3:30b"
+    ],
+
+    "judge_provider": "ollama",
+    "gemini_judge_model": "gemini-3.6-flash",
+    "anthropic_judge_model": "claude-haiku-4-5-20251001"
   },
 
   "evaluation": {
@@ -73,10 +76,11 @@
   },
 
   "execution": {
-    "test_case_limit":1,
+    "test_case_limit":3,
     "request_timeout_seconds": 180,
     "retries": 1,
-    "generator_concurrency": 3,
-    "metric_concurrency": 6
+    "generator_concurrency": 1,
+    "metric_concurrency": 6,
+    "evaluation_concurrency": 3
   }
 }

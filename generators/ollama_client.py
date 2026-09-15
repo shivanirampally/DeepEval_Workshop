@@ -8,6 +8,7 @@ class OllamaClient:
         self.timeout = timeout
         self.retries = retries
         self.temperature = temperature
+        self._session = requests.Session()
 
     def generate(self, model, prompt):
         payload = {
@@ -20,7 +21,7 @@ class OllamaClient:
         last_error = None
         for attempt in range(self.retries + 1):
             try:
-                response = requests.post(
+                response = self._session.post(
                     f"{self.base_url}/api/generate",
                     json=payload,
                     timeout=self.timeout,

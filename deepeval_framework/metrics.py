@@ -1,4 +1,4 @@
-from deepeval.models import OllamaModel
+from deepeval.models import AnthropicModel, GeminiModel, OllamaModel
 from deepeval.metrics import (
     AnswerRelevancyMetric,
     BiasMetric,
@@ -8,10 +8,63 @@ from deepeval.metrics import (
 )
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from config import METRIC_THRESHOLDS
+from config import (
+    ANTHROPIC_API_KEY,
+    GOOGLE_API_KEY,
+    JUDGE_PROVIDER,
+    METRIC_THRESHOLDS,
+)
+
+
+# Evaluation steps are deterministic derivations of the (static) criteria
+# below at temperature=0. Captured once from the configured judge model
+# (qwen3-coder:30b) via GEval._generate_evaluation_steps() and hardcoded
+# here so every measure() call skips the "generate evaluation steps" LLM
+# round trip instead of repeating it for every test case and generator.
+CORRECTNESS_STEPS = [
+    "Verify that the Actual Output directly answers the Input question by "
+    "checking if all key elements from the Input are addressed in the "
+    "Actual Output, and ensure the response is relevant to the specific "
+    "query asked",
+    "Validate factual accuracy by cross-referencing the Actual Output "
+    "against the Expected Output and Retrieval Context, confirming that "
+    "all claims in Actual Output are supported by the source material and "
+    "match the golden answer",
+    "Check that the Retrieval Context provides sufficient evidence for the "
+    "Actual Output, ensuring the source contains the information needed to "
+    "generate the response and that the Actual Output doesn't introduce "
+    "unsupported claims",
+    "Confirm that the Expected Output serves as the benchmark for factual "
+    "correctness, ensuring the Actual Output aligns with the golden answer "
+    "and that any discrepancies between Actual and Expected are properly "
+    "justified by the Retrieval Context",
+]
+
+COMPLETENESS_STEPS = [
+    "Compare the Input question with the Expected Output to identify all "
+    "required information elements that must be covered",
+    "Evaluate the Actual Output against the Expected Output to verify all "
+    "necessary information is present without additional invented details",
+    "Check that the Actual Output directly addresses the Input question by "
+    "ensuring no required information is missing",
+    "Confirm the response is concise but complete, containing only the "
+    "information needed to answer the question",
+]
 
 
 def create_judge(model_name, base_url):
+    if JUDGE_PROVIDER == "gemini":
+        return GeminiModel(
+            model=model_name,
+            api_key=GOOGLE_API_KEY,
+            temperature=0,
+        )
+    if JUDGE_PROVIDER == "anthropic":
+        return AnthropicModel(
+            model=model_name,
+            api_key=ANTHROPIC_API_KEY,
+            temperature=0,
+        )
     return OllamaModel(
         model=model_name,
         base_url=base_url,
@@ -37,10 +90,12 @@ def _geval(
     judge,
     params,
     metric_name,
+    evaluation_steps,
 ):
     return GEval(
         name=name,
         criteria=criteria,
+        evaluation_steps=evaluation_steps,
         evaluation_params=params,
         threshold=METRIC_THRESHOLDS[metric_name]["pass"],
         model=judge,
@@ -86,6 +141,7 @@ def create_metrics(judge_name, base_url):
                 SingleTurnParams.RETRIEVAL_CONTEXT,
             ],
             "correctness",
+            CORRECTNESS_STEPS,
         ),
         "completeness": _geval(
             "Completeness",
@@ -103,6 +159,7 @@ def create_metrics(judge_name, base_url):
                 SingleTurnParams.EXPECTED_OUTPUT,
             ],
             "completeness",
+            COMPLETENESS_STEPS,
         ),
         "answer_relevancy": AnswerRelevancyMetric(
             threshold=METRIC_THRESHOLDS["answer_relevancy"]["pass"],

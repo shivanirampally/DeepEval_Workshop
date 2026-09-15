@@ -9,6 +9,10 @@ load_dotenv()
 
 os.environ.setdefault("DEEPEVAL_VERBOSE_MODE", "0")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
+# Confirmed via a live run: without this, DeepEval blocks process exit for
+# up to 10s ("[PostHog] flush timed out") trying to send telemetry. This is
+# an internal evaluation tool with no need to phone home, so it's disabled.
+os.environ.setdefault("DEEPEVAL_TELEMETRY_OPT_OUT", "YES")
 
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "project_config.json"
@@ -46,6 +50,13 @@ JUDGE_CONCURRENCY = int(
     )
 )
 
+EVALUATION_CONCURRENCY = int(
+    os.getenv(
+        "EVALUATION_CONCURRENCY",
+        CONFIG["execution"]["evaluation_concurrency"],
+    )
+)
+
 RETRIES = int(os.getenv("RETRIES", CONFIG["execution"]["retries"]))
 TEMPERATURE = float(
     os.getenv("TEMPERATURE", CONFIG["evaluation"]["temperature"])
@@ -77,6 +88,22 @@ EXCLUDED_MODELS = tuple(CONFIG["models"]["excluded_patterns"])
 
 GENERATOR_COUNT = int(CONFIG["models"]["generator_count"])
 JUDGE_COUNT = int(CONFIG["models"]["judge_count"])
+
+JUDGE_PROVIDER = os.getenv(
+    "JUDGE_PROVIDER",
+    CONFIG["models"].get("judge_provider", "ollama"),
+).strip().lower()
+GEMINI_JUDGE_MODEL = os.getenv(
+    "GEMINI_JUDGE_MODEL",
+    CONFIG["models"].get("gemini_judge_model", "gemini-3.6-flash"),
+)
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+
+ANTHROPIC_JUDGE_MODEL = os.getenv(
+    "ANTHROPIC_JUDGE_MODEL",
+    CONFIG["models"].get("anthropic_judge_model", "claude-haiku-4-5-20251001"),
+)
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 METRIC_NAMES = tuple(
     item["name"]
@@ -141,6 +168,16 @@ def _configured_matches(
     ][:count]
 
 
+# Hosted judge providers: model name, its API key, and the env var name to
+# report if that key is missing. These judges are not Ollama server models,
+# so they skip Ollama discovery/reservation entirely - independence from
+# generators is already guaranteed by being a different provider.
+_HOSTED_JUDGES = {
+    "gemini": (GEMINI_JUDGE_MODEL, GOOGLE_API_KEY, "GOOGLE_API_KEY"),
+    "anthropic": (ANTHROPIC_JUDGE_MODEL, ANTHROPIC_API_KEY, "ANTHROPIC_API_KEY"),
+}
+
+
 def discover_models():
     models = _usable(list_server_models())
 
@@ -150,13 +187,6 @@ def discover_models():
         GENERATOR_COUNT,
     )
 
-    judges = _configured_matches(
-        PREFERRED_JUDGES,
-        models,
-        JUDGE_COUNT,
-        reserved=generators,
-    )
-
     if len(generators) < GENERATOR_COUNT:
         raise RuntimeError(
             f"Configured generator set requires "
@@ -164,13 +194,29 @@ def discover_models():
             f"{len(generators)} are installed on the server."
         )
 
-    if len(judges) < JUDGE_COUNT:
-        raise RuntimeError(
-            f"Configured judge set requires "
-            f"{JUDGE_COUNT} model(s), but only "
-            f"{len(judges)} independent judge model(s) "
-            f"are available."
+    if JUDGE_PROVIDER in _HOSTED_JUDGES:
+        judge_model, api_key, env_var_name = _HOSTED_JUDGES[JUDGE_PROVIDER]
+        if not api_key:
+            raise RuntimeError(
+                f"judge_provider is '{JUDGE_PROVIDER}' but {env_var_name} "
+                "is not set. Add it to .env or the environment."
+            )
+        judges = [judge_model]
+    else:
+        judges = _configured_matches(
+            PREFERRED_JUDGES,
+            models,
+            JUDGE_COUNT,
+            reserved=generators,
         )
+
+        if len(judges) < JUDGE_COUNT:
+            raise RuntimeError(
+                f"Configured judge set requires "
+                f"{JUDGE_COUNT} model(s), but only "
+                f"{len(judges)} independent judge model(s) "
+                f"are available."
+            )
 
     return {
         "generators": generators,
