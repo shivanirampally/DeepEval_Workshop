@@ -6,23 +6,27 @@ import time
 import pandas as pd
 
 import config
-
-# Windows defaults stdout/stderr to the legacy cp1252 codec whenever they
-# are not attached to an interactive console (redirected to a file/pipe,
-# as in CI or `python main.py > log.txt`). That codec cannot encode the
-# U+2713/U+2717 progress markers used below, which crashes the print
-# call itself - including inside the exception handler meant to report
-# that same failure. Forcing UTF-8 here makes console output encoding-safe
-# in every invocation context.
-for _stream in (sys.stdout, sys.stderr):
-    if hasattr(_stream, "reconfigure"):
-        _stream.reconfigure(encoding="utf-8", errors="replace")
 from analysis.recommendation import improvement_suggestions, recommend
 from config import discover_models
 from deepeval_framework.evaluation import TruthsCache, evaluate_one
 from deepeval_framework.scoring import testcase_verdict, weighted_score
 from generators.ollama_client import OllamaClient
 from reporting.excel import save_generator_responses, save_report
+
+
+def _fix_console_encoding():
+    """Force UTF-8 on stdout/stderr.
+
+    Windows defaults them to the legacy cp1252 codec whenever they are not
+    attached to an interactive console (redirected to a file/pipe, as in CI
+    or `python main.py > log.txt`). That codec cannot encode the U+2713/
+    U+2717 progress markers this module prints, which crashes the print
+    call itself - including inside the exception handler meant to report
+    that same failure.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
 
 
 def load_dataset():
@@ -316,9 +320,11 @@ def build_summary(verdict, suggestions, summaries):
         {
             "section": "Testcase Gate",
             "value": (
-                "Weighted score >= 0.80 for PASS; 0.60 to <0.80 for REVIEW; "
-                "below 0.60 for FAIL. Hallucination, Faithfulness and "
-                "Correctness must not fall below their configured REVIEW thresholds."
+                f"Weighted score >= {config.QUALITY_THRESHOLD:.2f} for PASS; "
+                f"{config.WARNING_THRESHOLD:.2f} to <{config.QUALITY_THRESHOLD:.2f} "
+                f"for REVIEW; below {config.WARNING_THRESHOLD:.2f} for FAIL. "
+                "Hallucination, Faithfulness and Correctness must not fall "
+                "below their configured REVIEW thresholds."
             ),
         },
         {
@@ -415,6 +421,8 @@ def print_timing_report(phase_timings, metric_durations):
 
 
 def main():
+    _fix_console_encoding()
+
     run_started = time.perf_counter()
     phase_timings = {}
 

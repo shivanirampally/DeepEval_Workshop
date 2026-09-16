@@ -118,12 +118,17 @@ It should not be interpreted as:
 The detailed report also contains the judge's reason so the reviewer can identify which claims or wording caused the lower score.
 
 ## Quality gate
->= 0.90 → metric PASS
-0.70 to < 0.90 → metric REVIEW
-< 0.70 → metric FAIL
+Each metric has its own PASS/REVIEW/FAIL thresholds, configured in
+`project_config.json`'s `evaluation.metric_thresholds`:
 
-A testcase passes only when every configured metric meets the 0.90 threshold.
-The judge evaluates every generated response.
+>= 0.80 → metric PASS, 0.60 to < 0.80 → REVIEW, < 0.60 → FAIL
+(Completeness uses 0.70/0.50 instead of 0.80/0.60.)
+
+A testcase passes when its weighted score (the same `metric_weights` from
+`project_config.json`) is >= 0.80, is REVIEW between 0.60 and < 0.80, and
+FAIL below 0.60 - AND Hallucination, Faithfulness and Correctness must each
+individually clear their own REVIEW threshold, regardless of the weighted
+score. The judge evaluates every generated response.
 
 The generator recommendation considers the quality gate first, followed by weighted semantic score and testcase pass rate.
 
@@ -181,21 +186,40 @@ multigenerators-e2e_evals/
 │
 ├── tests/
 │   ├── conftest.py
-│   └── test_scoring.py
+│   ├── test_scoring.py
+│   ├── test_evaluation.py
+│   ├── test_excel_report.py
+│   └── test_metrics.py
 │
 ├── config.py
 ├── project_config.json
 ├── main.py
 ├── README.md
 ├── requirements.txt
+├── .env.example
 └── .gitignore
-Current validation status
 
-The project has been validated locally for:
-Python imports
-DeepEval installation
-unit tests
-Python compilation
-configuration loading
-framework imports
-The full Ollama evaluation requires access to the configured internal Ollama server.
+## Validation status
+
+Validated with live end-to-end runs against the configured Ollama server
+(generators + judge), at 1, 3, 5, and 10 test cases, in addition to the
+full unit test suite (`pytest tests/`). Representative timings (current
+model roster, `qwen3-coder:30b` judge, serialized single-request Ollama
+server):
+
+| test_case_limit | Total run time |
+|---|---|
+| 1  | ~90s |
+| 3  | ~4-4.5 min |
+| 5  | ~7-7.5 min |
+| 10 | ~14 min |
+
+The evaluation phase (the judge scoring each response) dominates total
+time and scales close to linearly with test case count, because the
+Ollama server processes one request at a time - confirmed directly by
+benchmarking concurrent requests against it. `test_case_limit=3` is the
+current default as the largest sample that reliably completes in under
+5 minutes on this server; run with a higher limit for fuller coverage
+when a longer run is acceptable. See `judge_provider` above for an
+alternative that removes this ceiling by using a hosted judge model
+instead of the local Ollama server.

@@ -1,4 +1,9 @@
-from config import METRIC_THRESHOLDS, METRIC_WEIGHTS
+from config import (
+    METRIC_THRESHOLDS,
+    METRIC_WEIGHTS,
+    QUALITY_THRESHOLD,
+    WARNING_THRESHOLD,
+)
 
 
 CRITICAL_METRICS = {
@@ -75,10 +80,10 @@ def testcase_verdict(metric_results):
     if score is None:
         return "FAIL"
 
-    if score >= 0.80:
+    if score >= QUALITY_THRESHOLD:
         return "PASS"
 
-    if score >= 0.60:
+    if score >= WARNING_THRESHOLD:
         return "REVIEW"
 
     return "FAIL"

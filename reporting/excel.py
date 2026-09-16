@@ -414,9 +414,11 @@ def save_report(
     ws.append(
         [
             "Testcase rule",
-            "Overall weighted score >= 0.80 is PASS; 0.60 to <0.80 is "
-            "REVIEW; below 0.60 is FAIL. Hallucination, Faithfulness and "
-            "Correctness must not fall below their REVIEW thresholds.",
+            f"Overall weighted score >= {config.QUALITY_THRESHOLD:.2f} is "
+            f"PASS; {config.WARNING_THRESHOLD:.2f} to <{config.QUALITY_THRESHOLD:.2f} "
+            f"is REVIEW; below {config.WARNING_THRESHOLD:.2f} is FAIL. "
+            "Hallucination, Faithfulness and Correctness must not fall "
+            "below their REVIEW thresholds.",
         ]
     )
 
