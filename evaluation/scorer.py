@@ -1,4 +1,4 @@
-from config import (
+from settings.config import (
     METRIC_THRESHOLDS,
     METRIC_WEIGHTS,
     QUALITY_THRESHOLD,

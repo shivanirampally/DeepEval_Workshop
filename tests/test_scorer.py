@@ -1,4 +1,4 @@
-from evaluation.scoring import (
+from evaluation.scorer import (
     is_testcase_passed,
     testcase_status as get_testcase_status,
     weighted_score,

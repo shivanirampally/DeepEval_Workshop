@@ -6,7 +6,7 @@ sample size) before anything downstream depends on it.
 """
 import pandas as pd
 
-import config
+from settings import config
 
 
 REQUIRED_TEST_DATA_COLUMNS = {"Test_ID", "Source", "Question", "Golden_Answer"}

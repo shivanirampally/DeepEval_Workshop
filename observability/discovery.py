@@ -8,7 +8,7 @@ verifiable rather than assumed.
 """
 import requests
 
-import config
+from settings import config
 
 
 def list_server_models():

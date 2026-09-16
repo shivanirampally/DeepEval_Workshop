@@ -1,6 +1,6 @@
 from openpyxl import load_workbook
 
-from reporting.excel import save_report
+from observability.reporting.excel import save_report
 
 
 def test_failures_sheet_uses_each_rows_own_metric_threshold(tmp_path):

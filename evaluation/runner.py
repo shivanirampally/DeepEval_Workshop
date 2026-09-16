@@ -9,11 +9,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 import time
 
-from evaluation.scoring import metric_verdict
-from metrics.definitions import build_test_case, create_metrics
+from evaluation.metrics import build_test_case, create_metrics
+from evaluation.scorer import metric_verdict
 from observability import console
 
-from config import (
+from settings.config import (
     JUDGE_CONCURRENCY,
     METRIC_NAMES,
     RETRIES,

@@ -10,17 +10,17 @@ read, tested, and changed independently:
 
 | Layer | Package | Responsibility |
 |---|---|---|
-| Testdata | `testdata/` | Loads and validates the benchmark workbook (`hallucination_benchmark.xlsx`) and builds the per-row generator prompt. |
-| Metrics | `metrics/` | Defines the DeepEval metrics, their thresholds, and the judge model construction (Ollama/Gemini/Anthropic). |
-| Evaluation | `evaluation/` | Runs metrics against a response (`runner.py`) and turns metric results into PASS/REVIEW/FAIL and technical-error verdicts (`scoring.py`). |
-| Governance | `governance/` | Verifies the generators/judge actually available and independent (`discovery.py`), and records what produced a report - run ID, dataset/prompt hashes, package versions, exact model digests (`provenance.py`). |
-| Observability | `observability/` | Owns every line the run prints live, including per-internal-judge-call progress, so "what does a run look like while it's happening" is one file. |
-| Reporting | `reporting/` | Persists the run as Excel workbooks (durable artifacts, as opposed to observability's live console output). |
-| Analysis | `analysis/` | Turns evaluation results into a generator recommendation and prompt-improvement suggestions. |
-| Generators | `generators/` | The Ollama HTTP client used to generate candidate responses. |
+| Data | `testdata/` | Loads and validates the benchmark workbook, builds the DeepEval `LLMTestCase` / per-row prompt. |
+| Execution | `execution/` | Runs the run (`main.py`, the thin orchestrator with no metric/scoring/discovery logic of its own) and generates candidate responses (`generators/ollama_client.py`). |
+| Evaluation | `evaluation/` | Metric definitions and judge construction (`metrics.py`), runs metrics against a response (`runner.py`), and turns results into PASS/REVIEW/FAIL/technical-error verdicts (`scorer.py`). |
+| Observability & governance | `observability/` | Everything about visibility into a run: is the generator/judge roster valid and independent (`discovery.py`), what produced a report - run ID, dataset/prompt hashes, package versions, exact model digests (`provenance.py`), live console progress (`console.py`), what the results mean (`analysis.py` - recommendation and prompt-improvement suggestions), and the durable Excel report (`reporting/excel.py`). |
+| Settings | `settings/` | `config.py` (env/JSON-driven constants) and `project_config.json` (the actual tunable values). |
 
-`main.py` is a thin orchestrator: it sequences these layers for one run and
-contains no metric, scoring, or discovery logic of its own.
+Project-root files (`.env`, `README.md`, `requirements.txt`, `.gitignore`)
+are **not** part of this layering - they're repo/tooling scaffolding that
+`pip`, `git`, GitHub, and `python-dotenv`'s default lookup all expect at the
+true root regardless of internal architecture, so they stay there rather
+than moving into `settings/`.
 
 ## Model roles
 Generators:
@@ -188,59 +188,57 @@ The report contains:
 
 # Run
 Activate the project environment: .\.venv\Scripts\Activate.ps1
-Then: python main.py
+Then, from the project root: python -m execution.main
+
+(`main.py` lives in `execution/`, not the project root - it's a package
+module now, run with `-m` like any other, not a standalone script.)
 
 NOTE: The Ollama server must be reachable from the machine running the POC and must contain the configured generator and judge models.
 
 ## Project structure
 multigenerators-e2e_evals/
 │
-├── testdata/                  # Testdata layer
+├── testdata/                      # Data layer
 │   ├── __init__.py
 │   ├── loader.py
 │   └── hallucination_benchmark.xlsx
 │
-├── metrics/                   # Metric layer
+├── execution/                     # Execution layer
 │   ├── __init__.py
-│   └── definitions.py
+│   ├── main.py                    # run entry point: python -m execution.main
+│   └── generators/
+│       ├── __init__.py
+│       └── ollama_client.py
 │
-├── evaluation/                # Evaluation layer
+├── evaluation/                    # Evaluation layer
 │   ├── __init__.py
+│   ├── metrics.py
 │   ├── runner.py
-│   └── scoring.py
+│   └── scorer.py
 │
-├── governance/                # Governance layer
+├── observability/                 # Observability & governance layer
 │   ├── __init__.py
 │   ├── discovery.py
-│   └── provenance.py
+│   ├── provenance.py
+│   ├── console.py
+│   ├── analysis.py
+│   └── reporting/
+│       ├── __init__.py
+│       └── excel.py
 │
-├── observability/             # Observability layer
+├── settings/                      # Settings
 │   ├── __init__.py
-│   └── console.py
-│
-├── generators/
-│   ├── __init__.py
-│   └── ollama_client.py
-│
-├── analysis/
-│   ├── __init__.py
-│   └── recommendation.py
-│
-├── reporting/
-│   ├── __init__.py
-│   └── excel.py
+│   ├── config.py
+│   └── project_config.json
 │
 ├── tests/
 │   ├── conftest.py
-│   ├── test_scoring.py
+│   ├── test_scorer.py
 │   ├── test_evaluation.py
 │   ├── test_excel_report.py
 │   ├── test_metrics.py
-│   └── test_recommendation.py
+│   └── test_analysis.py
 │
-├── config.py
-├── project_config.json
-├── main.py
 ├── README.md
 ├── requirements.txt
 └── .gitignore

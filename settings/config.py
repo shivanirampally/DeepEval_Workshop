@@ -13,8 +13,9 @@ os.environ.setdefault("LOG_LEVEL", "WARNING")
 # an internal evaluation tool with no need to phone home, so it's disabled.
 os.environ.setdefault("DEEPEVAL_TELEMETRY_OPT_OUT", "YES")
 
-ROOT = Path(__file__).resolve().parent
-CONFIG_PATH = ROOT / "project_config.json"
+SETTINGS_DIR = Path(__file__).resolve().parent
+ROOT = SETTINGS_DIR.parent
+CONFIG_PATH = SETTINGS_DIR / "project_config.json"
 
 with CONFIG_PATH.open("r", encoding="utf-8") as file:
     CONFIG = json.load(file)

@@ -1,4 +1,4 @@
-from analysis.recommendation import recommend
+from observability.analysis import recommend
 
 
 def _row(generator, score, passed, total, technical=0):

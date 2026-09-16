@@ -6,7 +6,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-import config
+from settings import config
 
 
 METRIC_DISPLAY_NAMES = {

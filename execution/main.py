@@ -1,24 +1,24 @@
 """Run orchestration.
 
-Sequences the layers for one evaluation run: testdata -> generation ->
-evaluation (metrics + scoring) -> governance (provenance) -> reporting,
-narrating progress through observability as it goes. Contains no metric,
-scoring, or discovery logic itself - those live in their own layers.
+Sequences the layers for one evaluation run: testdata -> execution
+(generation) -> evaluation (metrics + scorer) -> observability (discovery,
+provenance, console, reporting), narrating progress as it goes. Contains no
+metric, scoring, discovery, or reporting logic of its own - those live in
+their own layers.
 """
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 import sys
 import time
 
-import config
-from analysis.recommendation import improvement_suggestions, recommend
 from evaluation.runner import TruthsCache, evaluate_one
-from evaluation.scoring import testcase_status, testcase_verdict, weighted_score
-from generators.ollama_client import OllamaClient
-from governance import provenance
-from governance.discovery import discover_models
-from observability import console
-from reporting.excel import save_generator_responses, save_report
+from evaluation.scorer import testcase_status, testcase_verdict, weighted_score
+from execution.generators.ollama_client import OllamaClient
+from observability import console, provenance
+from observability.analysis import improvement_suggestions, recommend
+from observability.discovery import discover_models
+from observability.reporting.excel import save_generator_responses, save_report
+from settings import config
 from testdata.loader import build_prompt, load_dataset, load_prompt
 
 
@@ -27,7 +27,7 @@ def _fix_console_encoding():
 
     Windows defaults them to the legacy cp1252 codec whenever they are not
     attached to an interactive console (redirected to a file/pipe, as in CI
-    or `python main.py > log.txt`). That codec cannot encode the U+2713/
+    or `python -m execution.main > log.txt`). That codec cannot encode the U+2713/
     U+2717 progress markers this module prints, which crashes the print
     call itself - including inside the exception handler meant to report
     that same failure.

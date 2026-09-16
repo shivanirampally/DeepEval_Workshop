@@ -1,5 +1,5 @@
-import metrics.definitions as metrics_module
-from metrics.definitions import (
+import evaluation.metrics as metrics_module
+from evaluation.metrics import (
     COMPLETENESS_STEPS,
     CORRECTNESS_STEPS,
     create_judge,

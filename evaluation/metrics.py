@@ -8,7 +8,7 @@ from deepeval.metrics import (
 )
 from deepeval.test_case import LLMTestCase, SingleTurnParams
 
-from config import (
+from settings.config import (
     ANTHROPIC_API_KEY,
     GOOGLE_API_KEY,
     JUDGE_PROVIDER,
