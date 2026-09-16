@@ -5,6 +5,5 @@ __pycache__/
 .deepeval/
 .env
 *.pyc
-reports/**/*.xlsx
-outputs/**/*.xlsx
+runs/**/*.xlsx
 *.log

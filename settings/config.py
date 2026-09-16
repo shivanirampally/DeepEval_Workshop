@@ -21,8 +21,9 @@ with CONFIG_PATH.open("r", encoding="utf-8") as file:
     CONFIG = json.load(file)
 
 DATASET_PATH = ROOT / "testdata" / "hallucination_benchmark.xlsx"
-RESPONSE_ROOT = ROOT / "outputs" / "generator_responses"
-REPORT_ROOT = ROOT / "reports"
+RUNS_ROOT = ROOT / "runs"
+RESPONSE_ROOT = RUNS_ROOT / "generator_responses"
+REPORT_ROOT = RUNS_ROOT / "reports"
 
 OLLAMA_BASE_URL = os.getenv(
     "OLLAMA_BASE_URL",

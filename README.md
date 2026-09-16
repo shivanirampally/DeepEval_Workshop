@@ -166,10 +166,10 @@ meaningless winner from a smoke-sized sample.
 
 ## Reports
 
-Generator response workbook: `outputs/generator_responses/YYYY-MM-DD/generator_responses_<run_id>.xlsx`
+Generator response workbook: `runs/generator_responses/YYYY-MM-DD/generator_responses_<run_id>.xlsx`
 Each generator has its own worksheet containing the generated responses and execution information.
 
-Evaluation report: `reports/YYYY-MM-DD/generator_comparison_<run_id>.xlsx`
+Evaluation report: `runs/reports/YYYY-MM-DD/generator_comparison_<run_id>.xlsx`
 
 Both files for the same run share the same `run_id`, so they can be
 correlated even if the run took several minutes between generation and the
