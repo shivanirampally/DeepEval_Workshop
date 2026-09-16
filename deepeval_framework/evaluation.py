@@ -45,12 +45,40 @@ def _apply_cached_truths(metric, cached_truths):
     metric._generate_truths = lambda *args, **kwargs: cached_truths
 
 
+def _instrument_judge_calls(metric, context_label):
+    """Print each internal judge LLM call as it completes.
+
+    DeepEval metrics make several sequential calls to the judge model per
+    measure() (e.g. Faithfulness: extract truths, extract claims, generate
+    verdicts, generate reason). Every one of those calls goes through
+    model.generate(prompt, schema=...), and the schema class DeepEval
+    passes (Truths, Claims, Verdicts, FaithfulnessScoreReason, ...) names
+    the step, so wrapping generate() gives an accurate, real-time view of
+    backend activity instead of a single opaque wait per metric. This adds
+    a print() and two perf_counter() reads around a call that already
+    takes seconds - no measurable latency.
+    """
+    original_generate = metric.model.generate
+
+    def logged_generate(*args, **kwargs):
+        schema = kwargs.get("schema")
+        step = schema.__name__ if schema is not None else "response"
+        started = time.perf_counter()
+        result = original_generate(*args, **kwargs)
+        elapsed = time.perf_counter() - started
+        print(f"      {context_label} {step}: {elapsed:.1f}s")
+        return result
+
+    metric.model.generate = logged_generate
+
+
 def _run_metric(
     metric_name,
     metric,
     test_case,
     truths_cache=None,
     cache_key=None,
+    context_label=None,
 ):
     last_error = ""
     use_truths_cache = (
@@ -61,6 +89,11 @@ def _run_metric(
     cached_truths = truths_cache.get(cache_key) if use_truths_cache else None
     if cached_truths is not None:
         _apply_cached_truths(metric, cached_truths)
+
+    if context_label is not None:
+        _instrument_judge_calls(
+            metric, f"{context_label}[{metric_name}]"
+        )
 
     for attempt in range(RETRIES + 1):
         try:
@@ -167,6 +200,9 @@ def evaluate_one(
     )
 
     cache_key = str(response_row.get("test_id", ""))
+    context_label = (
+        f"[{response_row.get('generator', '')}][{cache_key}]"
+    )
 
     with ThreadPoolExecutor(
         max_workers=workers
@@ -179,6 +215,7 @@ def evaluate_one(
                 test_case,
                 truths_cache,
                 cache_key,
+                context_label,
             ): name
             for name in METRIC_NAMES
         }

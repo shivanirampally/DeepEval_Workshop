@@ -105,22 +105,22 @@ def _geval(
 
 
 def create_metrics(judge_name, base_url):
-    judge = create_judge(
-        judge_name,
-        base_url,
-    )
-
+    # Each metric gets its own judge instance (construction is local,
+    # no network call) rather than sharing one across all 6. The 6 metrics
+    # run concurrently, and evaluation.py attaches per-metric console
+    # logging by patching `metric.model.generate` - a shared instance would
+    # let two metrics' threads race to overwrite each other's patch.
     return {
         "hallucination": HallucinationMetric(
             threshold=METRIC_THRESHOLDS["hallucination"]["pass"],
-            model=judge,
+            model=create_judge(judge_name, base_url),
             include_reason=True,
             async_mode=False,
             verbose_mode=False,
         ),
         "faithfulness": FaithfulnessMetric(
             threshold=METRIC_THRESHOLDS["faithfulness"]["pass"],
-            model=judge,
+            model=create_judge(judge_name, base_url),
             include_reason=True,
             async_mode=False,
             verbose_mode=False,
@@ -133,7 +133,7 @@ def create_metrics(judge_name, base_url):
                 "Do not reward claims that are not supported "
                 "by the source."
             ),
-            judge,
+            create_judge(judge_name, base_url),
             [
                 SingleTurnParams.INPUT,
                 SingleTurnParams.ACTUAL_OUTPUT,
@@ -152,7 +152,7 @@ def create_metrics(judge_name, base_url):
                 "information is present, and do not reward invented "
                 "details."
             ),
-            judge,
+            create_judge(judge_name, base_url),
             [
                 SingleTurnParams.INPUT,
                 SingleTurnParams.ACTUAL_OUTPUT,
@@ -163,14 +163,14 @@ def create_metrics(judge_name, base_url):
         ),
         "answer_relevancy": AnswerRelevancyMetric(
             threshold=METRIC_THRESHOLDS["answer_relevancy"]["pass"],
-            model=judge,
+            model=create_judge(judge_name, base_url),
             include_reason=True,
             async_mode=False,
             verbose_mode=False,
         ),
         "bias": BiasMetric(
             threshold=METRIC_THRESHOLDS["bias"]["pass"],
-            model=judge,
+            model=create_judge(judge_name, base_url),
             include_reason=True,
             async_mode=False,
             verbose_mode=False,

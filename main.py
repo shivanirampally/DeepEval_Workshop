@@ -124,11 +124,35 @@ def generate_for_model(model, dataset, prompt_template):
     return rows
 
 
+def _generator_concurrency_note(workers, total):
+    if workers >= total:
+        return f"{total} generators running concurrently"
+    if workers == 1:
+        return (
+            f"{total} generators running one at a time (concurrency=1 - "
+            "avoids reloading different models on the shared Ollama server)"
+        )
+    return f"{total} generators running {workers} at a time"
+
+
+def _avg_duration(rows):
+    durations = [
+        row["duration_seconds"]
+        for row in rows
+        if isinstance(row.get("duration_seconds"), (int, float))
+    ]
+    return sum(durations) / len(durations) if durations else None
+
+
 def generate_responses(models, dataset, prompt):
     responses = {}
     workers = min(config.GENERATOR_CONCURRENCY, len(models))
 
-    print(f"Generation : {workers} generators in parallel")
+    print("-" * 60)
+    print("STEP 1/3: Generating responses")
+    print("-" * 60)
+    print(_generator_concurrency_note(workers, len(models)))
+
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
             pool.submit(generate_for_model, model, dataset, prompt): model
@@ -142,9 +166,14 @@ def generate_responses(models, dataset, prompt):
                     row["status"] == "COMPLETED"
                     for row in responses[model]
                 )
+                avg_duration = _avg_duration(responses[model])
+                avg_note = (
+                    f", {avg_duration:.1f}s avg"
+                    if avg_duration is not None else ""
+                )
                 print(
                     f"  ✓ {model}: {completed}/{len(dataset)} "
-                    "responses completed"
+                    f"responses completed{avg_note}"
                 )
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
@@ -272,7 +301,18 @@ def evaluate_generators(models, judge, responses, dataset):
     testcase_rows = []
 
     workers = min(config.EVALUATION_CONCURRENCY, len(models))
-    print(f"Evaluation : {workers} generators in parallel (judge={judge})")
+
+    print()
+    print("-" * 60)
+    print("STEP 2/3: Evaluating responses with DeepEval")
+    print("-" * 60)
+    print(
+        f"{len(models)} generators evaluated against judge={judge}, "
+        f"{workers} at a time. Each testcase runs {len(config.METRIC_NAMES)} "
+        "metrics concurrently; each metric line below is one internal "
+        "judge call as it completes ([generator][test_id][metric] step: "
+        "seconds)."
+    )
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
@@ -439,7 +479,7 @@ def main():
         phase_timings["Model discovery"] = time.perf_counter() - phase_started
 
         print("Generators : " + ", ".join(models))
-        print("Judge      : " + judge)
+        print(f"Judge      : {judge} (provider={config.JUDGE_PROVIDER})")
         print(f"Test cases : loading from {config.DATASET_PATH.name}")
 
         phase_started = time.perf_counter()
@@ -469,6 +509,11 @@ def main():
 
         verdict = recommend(results["summary"])
         suggestions = improvement_suggestions(results["failures"])
+
+        print()
+        print("-" * 60)
+        print("STEP 3/3: Building report")
+        print("-" * 60)
 
         phase_started = time.perf_counter()
         report_file = save_report(

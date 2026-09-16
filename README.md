@@ -35,9 +35,9 @@ at a hosted Gemini or Anthropic model instead of a local Ollama model:
    `"anthropic"` (default: `"ollama"`). The model used is
    `models.gemini_judge_model` (default: `gemini-3.6-flash`) or
    `models.anthropic_judge_model` (default: `claude-haiku-4-5-20251001`).
-2. Copy `.env.example` to `.env` and set `GOOGLE_API_KEY` and/or
-   `ANTHROPIC_API_KEY`. Never paste API keys into a chat/AI assistant -
-   add them to `.env` directly and only confirm they're present.
+2. Add `GOOGLE_API_KEY` and/or `ANTHROPIC_API_KEY` to `.env` (already
+   git-ignored). Never paste API keys into a chat/AI assistant - add them
+   to `.env` directly and only confirm they're present.
 
 Generators stay on the local Ollama server either way - only the judge
 moves. This trades local/offline evaluation for real request concurrency
@@ -196,7 +196,6 @@ multigenerators-e2e_evals/
 ├── main.py
 ├── README.md
 ├── requirements.txt
-├── .env.example
 └── .gitignore
 
 ## Validation status
