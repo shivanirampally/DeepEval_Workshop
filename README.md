@@ -3,6 +3,25 @@ This project sends the same benchmark question, source context and evaluation pr
 
 The purpose is to compare generator quality under the same conditions rather than allowing each model to use a different test or evaluation process.
 
+## Architecture
+
+The codebase is organized by concern, not by file type, so each layer can be
+read, tested, and changed independently:
+
+| Layer | Package | Responsibility |
+|---|---|---|
+| Testdata | `testdata/` | Loads and validates the benchmark workbook (`hallucination_benchmark.xlsx`) and builds the per-row generator prompt. |
+| Metrics | `metrics/` | Defines the DeepEval metrics, their thresholds, and the judge model construction (Ollama/Gemini/Anthropic). |
+| Evaluation | `evaluation/` | Runs metrics against a response (`runner.py`) and turns metric results into PASS/REVIEW/FAIL and technical-error verdicts (`scoring.py`). |
+| Governance | `governance/` | Verifies the generators/judge actually available and independent (`discovery.py`), and records what produced a report - run ID, dataset/prompt hashes, package versions, exact model digests (`provenance.py`). |
+| Observability | `observability/` | Owns every line the run prints live, including per-internal-judge-call progress, so "what does a run look like while it's happening" is one file. |
+| Reporting | `reporting/` | Persists the run as Excel workbooks (durable artifacts, as opposed to observability's live console output). |
+| Analysis | `analysis/` | Turns evaluation results into a generator recommendation and prompt-improvement suggestions. |
+| Generators | `generators/` | The Ollama HTTP client used to generate candidate responses. |
+
+`main.py` is a thin orchestrator: it sequences these layers for one run and
+contains no metric, scoring, or discovery logic of its own.
+
 ## Model roles
 Generators:
 llama3:instruct -    general-purpose baseline
@@ -130,29 +149,42 @@ FAIL below 0.60 - AND Hallucination, Faithfulness and Correctness must each
 individually clear their own REVIEW threshold, regardless of the weighted
 score. The judge evaluates every generated response.
 
-The generator recommendation considers the quality gate first, followed by weighted semantic score and testcase pass rate.
+A metric that errors (judge timeout, rate limit, connection failure, or any
+other technical exception) never produces a weighted score by averaging over
+whatever else completed - the whole testcase is reported as `TECHNICAL ERROR`,
+distinct from `QUALITY FAIL`/`QUALITY REVIEW` (the judge completed and found a
+real quality issue) and `PASS`. Conflating "the judge couldn't finish" with
+"the response was bad" would misattribute an infrastructure problem to the
+generator.
 
-If the leading generators are too close to distinguish reliably, the report returns:
+The generator recommendation considers the quality gate first, followed by
+weighted semantic score and testcase pass rate - but only when the sample is
+large enough: below `execution.minimum_testcases_for_ranking` (default 10)
+test cases, or if any generator hit a technical error, the report explicitly
+declines to name a "preferred generator" rather than claim a statistically
+meaningless winner from a smoke-sized sample.
 
-No clear winner
-Reports
-Generator response workbook
-outputs/generator_responses/YYYY-MM-DD/
-generator_responses_YYYYMMDD_HHMMSS.xlsx
+## Reports
+
+Generator response workbook: `outputs/generator_responses/YYYY-MM-DD/generator_responses_<run_id>.xlsx`
 Each generator has its own worksheet containing the generated responses and execution information.
 
-Evaluation report
-reports/YYYY-MM-DD/
-generator_comparison_YYYYMMDD_HHMMSS.xlsx
+Evaluation report: `reports/YYYY-MM-DD/generator_comparison_<run_id>.xlsx`
+
+Both files for the same run share the same `run_id`, so they can be
+correlated even if the run took several minutes between generation and the
+final report.
 
 The report contains:
 
-Executive Summary — final recommendation and evaluation rules
-Generator Comparison — generator-level percentage scores and PASS/REVIEW/FAIL verdicts
-Testcase Comparison — testcase-level metric scores and testcase quality gate
-Detailed Metric Reasons — score, threshold result, gap to ideal, judge reason and technical status
-Failures — metrics/testcases that require attention
-Configuration — models, thresholds and execution settings
+- **Run Summary** — run ID, sample size, pass/error counts, phase timing (with percentages), and whether the run met the configured runtime target.
+- **Executive Summary** — final recommendation and evaluation rules.
+- **Generator Comparison** — generator-level percentage scores, PASS/REVIEW/FAIL verdicts, and technical-error/quality-fail/quality-review counts. A metric's per-generator average is blank, not silently averaged over partial results, if any evaluation of it was technically incomplete.
+- **Testcase Comparison** — testcase-level metric scores and status (PASS/QUALITY REVIEW/QUALITY FAIL/TECHNICAL ERROR).
+- **Detailed Metric Reasons** — score, threshold result, gap to ideal, judge reason, technical status, and duration.
+- **Failures** — metrics/testcases that require attention, with failure type (technical vs. quality) separated out.
+- **LLM Call Profile** — every individual internal judge LLM call (e.g. Faithfulness's truths/claims/verdicts/reason), the DeepEval step, and its duration - the same data streamed live to the console during the run, persisted for later analysis.
+- **Configuration** — models (with exact Ollama digests, not just tags), provider, package/interpreter versions, dataset/prompt hashes, concurrency, and thresholds, for reproducing exactly what produced this report.
 
 # Run
 Activate the project environment: .\.venv\Scripts\Activate.ps1
@@ -163,14 +195,28 @@ NOTE: The Ollama server must be reachable from the machine running the POC and m
 ## Project structure
 multigenerators-e2e_evals/
 │
-├── dataset/
+├── testdata/                  # Testdata layer
+│   ├── __init__.py
+│   ├── loader.py
 │   └── hallucination_benchmark.xlsx
 │
-├── deepeval_framework/
+├── metrics/                   # Metric layer
 │   ├── __init__.py
-│   ├── evaluation.py
-│   ├── metrics.py
+│   └── definitions.py
+│
+├── evaluation/                # Evaluation layer
+│   ├── __init__.py
+│   ├── runner.py
 │   └── scoring.py
+│
+├── governance/                # Governance layer
+│   ├── __init__.py
+│   ├── discovery.py
+│   └── provenance.py
+│
+├── observability/             # Observability layer
+│   ├── __init__.py
+│   └── console.py
 │
 ├── generators/
 │   ├── __init__.py
@@ -189,7 +235,8 @@ multigenerators-e2e_evals/
 │   ├── test_scoring.py
 │   ├── test_evaluation.py
 │   ├── test_excel_report.py
-│   └── test_metrics.py
+│   ├── test_metrics.py
+│   └── test_recommendation.py
 │
 ├── config.py
 ├── project_config.json
@@ -202,7 +249,10 @@ multigenerators-e2e_evals/
 
 Validated with live end-to-end runs against the configured Ollama server
 (generators + judge), at 1, 3, 5, and 10 test cases, in addition to the
-full unit test suite (`pytest tests/`). Representative timings (current
+full unit test suite (`pytest tests/`) - including after the layered
+restructure above, run live end-to-end through the project's actual
+`.venv` (242.82s for 3 test cases, in line with every prior measurement:
+no regression from the restructure). Representative timings (current
 model roster, `qwen3-coder:30b` judge, serialized single-request Ollama
 server):
 

@@ -2,11 +2,11 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-
-import config
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+
+import config
 
 
 METRIC_DISPLAY_NAMES = {
@@ -97,15 +97,13 @@ def _write_dataframe(ws, frame):
         ws.append(list(row))
 
 
-def save_generator_responses(response_rows, output_root):
+def save_generator_responses(response_rows, output_root, run_id=None):
     now = datetime.now()
     output_dir = Path(output_root) / now.strftime("%Y-%m-%d")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    file_path = (
-        output_dir
-        / f"generator_responses_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
-    )
+    run_id = run_id or now.strftime("%Y%m%d_%H%M%S")
+    file_path = output_dir / f"generator_responses_{run_id}.xlsx"
 
     with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
         for model, rows in response_rows.items():
@@ -123,18 +121,27 @@ def save_report(
     failures,
     configuration,
     report_root,
+    run_summary=None,
+    run_id=None,
 ):
     now = datetime.now()
     output_dir = Path(report_root) / now.strftime("%Y-%m-%d")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    file_path = (
-        output_dir
-        / f"generator_comparison_{now.strftime('%Y%m%d_%H%M%S')}.xlsx"
-    )
+    run_id = run_id or now.strftime("%Y%m%d_%H%M%S")
+    file_path = output_dir / f"generator_comparison_{run_id}.xlsx"
 
     workbook = Workbook()
     workbook.remove(workbook.active)
+
+    # ---------------------------------------------------------
+    # Run Summary - dashboard-style overview, first sheet a viewer sees
+    # ---------------------------------------------------------
+    ws = workbook.create_sheet("Run Summary")
+    ws.append(["Section", "Value"])
+    for item in run_summary or []:
+        ws.append([item.get("section", ""), item.get("value", "")])
+    _format_sheet(ws)
 
     # ---------------------------------------------------------
     # Executive Summary
@@ -193,6 +200,9 @@ def save_report(
             "Overall Score (%)",
             "Testcases Passed",
             "Testcases Failed",
+            "Technical Errors",
+            "Quality-Fail Testcases",
+            "Quality-Review Testcases",
             "Quality Gate",
         ]
     )
@@ -214,11 +224,20 @@ def save_report(
             ]
             metric_rows = metric_rows[metric_rows["metric"] == metric]
 
-            scores = pd.to_numeric(
-                metric_rows["score"], errors="coerce"
-            ).dropna()
-
-            score = float(scores.mean()) if not scores.empty else None
+            # A metric's per-generator average is blanked out, not
+            # silently computed from the successful rows only, if any of
+            # this generator's evaluations of that metric didn't complete -
+            # the same "don't average over partial failures" rule as
+            # weighted_score(), applied at this aggregate too.
+            if metric_rows.empty or (
+                metric_rows["status"].astype(str) != "COMPLETED"
+            ).any():
+                score = None
+            else:
+                scores = pd.to_numeric(
+                    metric_rows["score"], errors="coerce"
+                ).dropna()
+                score = float(scores.mean()) if not scores.empty else None
 
             passed_values = metric_rows["passed"].tolist()
             passed = bool(passed_values) and all(
@@ -241,13 +260,23 @@ def save_report(
             and isinstance(passed_count, (int, float))
             else ""
         )
+        technical_error_count = generator_summary.get(
+            "technical_error_count", 0
+        )
 
         row.extend(
             [
                 _percent(overall),
                 passed_count,
                 failed_count,
-                generator_summary.get("quality_gate", ""),
+                technical_error_count,
+                generator_summary.get("quality_fail_count", 0),
+                generator_summary.get("quality_review_count", 0),
+                (
+                    "TECHNICAL ERROR"
+                    if technical_error_count
+                    else generator_summary.get("quality_gate", "")
+                ),
             ]
         )
 
@@ -269,10 +298,9 @@ def save_report(
             if score_column in testcase_frame.columns:
                 ordered_columns.append(score_column)
 
-        if "testcase_verdict" in testcase_frame.columns:
-            ordered_columns.append("testcase_verdict")
-        elif "is_testcase_passed" in testcase_frame.columns:
-            ordered_columns.append("is_testcase_passed")
+        for status_column in ("testcase_status", "testcase_verdict"):
+            if status_column in testcase_frame.columns:
+                ordered_columns.append(status_column)
 
         testcase_frame = testcase_frame[
             [column for column in ordered_columns if column in testcase_frame]
@@ -281,8 +309,8 @@ def save_report(
         rename_map = {
             "generator": "Generator",
             "test_id": "Test Case",
-            "testcase_verdict": "Testcase Gate",
-            "is_testcase_passed": "Testcase Gate",
+            "testcase_status": "Testcase Status",
+            "testcase_verdict": "Quality Gate Verdict",
         }
 
         for metric in metrics:
@@ -295,11 +323,6 @@ def save_report(
         for column in testcase_frame.columns:
             if column.endswith("Score (%)"):
                 testcase_frame[column] = testcase_frame[column].apply(_percent)
-
-        if "Testcase Gate" in testcase_frame.columns and testcase_frame["Testcase Gate"].dtype == bool:
-            testcase_frame["Testcase Gate"] = testcase_frame[
-                "Testcase Gate"
-            ].map({True: "PASS", False: "FAIL"})
 
         _write_dataframe(ws, testcase_frame)
     else:
@@ -371,14 +394,16 @@ def save_report(
         "Metric",
         "Score (%)",
         "Verdict",
+        "Failure Type",
+        "Status",
         "Reason",
+        "Error",
     ]
     ws.append(failure_headers)
 
     for item in failures:
         metric = str(item.get("metric", "")).lower()
         score = item.get("score")
-        passed = False
 
         ws.append(
             [
@@ -387,10 +412,50 @@ def save_report(
                 item.get("test_id", ""),
                 METRIC_DISPLAY_NAMES.get(metric, item.get("metric", "")),
                 _percent(score),
-                _metric_verdict(score, passed, metric),
+                _metric_verdict(score, False, metric),
+                item.get("failure_type", ""),
+                item.get("status", ""),
                 item.get("reason", ""),
+                item.get("error", ""),
             ]
         )
+
+    _format_sheet(ws)
+
+    # ---------------------------------------------------------
+    # LLM Call Profile - individual internal DeepEval judge-call timing
+    # ---------------------------------------------------------
+    ws = workbook.create_sheet("LLM Call Profile")
+    ws.append(
+        [
+            "Generator",
+            "Judge",
+            "Test Case",
+            "Metric",
+            "Call #",
+            "DeepEval Step",
+            "Duration (s)",
+        ]
+    )
+
+    for item in detail_rows:
+        for index, call in enumerate(
+            item.get("llm_call_timings") or [], start=1
+        ):
+            ws.append(
+                [
+                    item.get("generator", ""),
+                    item.get("judge", ""),
+                    item.get("test_id", ""),
+                    METRIC_DISPLAY_NAMES.get(
+                        str(item.get("metric", "")).lower(),
+                        item.get("metric", ""),
+                    ),
+                    index,
+                    call.get("step", ""),
+                    call.get("duration_seconds", ""),
+                ]
+            )
 
     _format_sheet(ws)
 
@@ -418,12 +483,12 @@ def save_report(
             f"PASS; {config.WARNING_THRESHOLD:.2f} to <{config.QUALITY_THRESHOLD:.2f} "
             f"is REVIEW; below {config.WARNING_THRESHOLD:.2f} is FAIL. "
             "Hallucination, Faithfulness and Correctness must not fall "
-            "below their REVIEW thresholds.",
+            "below their REVIEW thresholds. Technical evaluation errors "
+            "are reported separately and never scored as a quality result.",
         ]
     )
 
     _format_sheet(ws)
-
 
     workbook.save(file_path)
 

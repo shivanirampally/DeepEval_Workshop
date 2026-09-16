@@ -1,17 +1,25 @@
+"""Run orchestration.
+
+Sequences the layers for one evaluation run: testdata -> generation ->
+evaluation (metrics + scoring) -> governance (provenance) -> reporting,
+narrating progress through observability as it goes. Contains no metric,
+scoring, or discovery logic itself - those live in their own layers.
+"""
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 import sys
 import time
 
-import pandas as pd
-
 import config
 from analysis.recommendation import improvement_suggestions, recommend
-from config import discover_models
-from deepeval_framework.evaluation import TruthsCache, evaluate_one
-from deepeval_framework.scoring import testcase_verdict, weighted_score
+from evaluation.runner import TruthsCache, evaluate_one
+from evaluation.scoring import testcase_status, testcase_verdict, weighted_score
 from generators.ollama_client import OllamaClient
+from governance import provenance
+from governance.discovery import discover_models
+from observability import console
 from reporting.excel import save_generator_responses, save_report
+from testdata.loader import build_prompt, load_dataset, load_prompt
 
 
 def _fix_console_encoding():
@@ -29,34 +37,14 @@ def _fix_console_encoding():
             stream.reconfigure(encoding="utf-8", errors="replace")
 
 
-def load_dataset():
-    dataset = pd.read_excel(config.DATASET_PATH, sheet_name="Test_Data")
-    if config.TEST_CASE_LIMIT > len(dataset):
-        raise ValueError(
-            f"test_case_limit={config.TEST_CASE_LIMIT} but dataset contains "
-            f"only {len(dataset)} test cases."
-        )
-    return dataset.head(config.TEST_CASE_LIMIT).copy()
+TOTAL_STEPS = 3
 
 
-def load_prompt():
-    prompts = pd.read_excel(
-        config.DATASET_PATH, sheet_name="Prompt_Versions"
-    )
-    return str(prompts.iloc[0]["Prompt"])
-
-
-def build_prompt(template, row):
-    return template.format(
-        source=str(row["Source"]),
-        question=str(row["Question"]),
-    )
-
-
-def _error_rows(model, dataset, error):
+def _error_rows(model, dataset, error, run_id):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     return [
         {
+            "run_id": run_id,
             "test_id": row["Test_ID"],
             "generator": model,
             "model": model,
@@ -74,7 +62,7 @@ def _error_rows(model, dataset, error):
     ]
 
 
-def generate_for_model(model, dataset, prompt_template):
+def generate_for_model(model, dataset, prompt_template, run_id):
     client = OllamaClient(
         config.OLLAMA_BASE_URL,
         config.REQUEST_TIMEOUT,
@@ -92,6 +80,7 @@ def generate_for_model(model, dataset, prompt_template):
             prompt = build_prompt(prompt_template, row)
             result = client.generate(model, prompt)
             rows.append({
+                "run_id": run_id,
                 "test_id": row["Test_ID"],
                 "generator": model,
                 "model": model,
@@ -107,6 +96,7 @@ def generate_for_model(model, dataset, prompt_template):
             })
         except Exception as exc:
             rows.append({
+                "run_id": run_id,
                 "test_id": row["Test_ID"],
                 "generator": model,
                 "model": model,
@@ -124,17 +114,6 @@ def generate_for_model(model, dataset, prompt_template):
     return rows
 
 
-def _generator_concurrency_note(workers, total):
-    if workers >= total:
-        return f"{total} generators running concurrently"
-    if workers == 1:
-        return (
-            f"{total} generators running one at a time (concurrency=1 - "
-            "avoids reloading different models on the shared Ollama server)"
-        )
-    return f"{total} generators running {workers} at a time"
-
-
 def _avg_duration(rows):
     durations = [
         row["duration_seconds"]
@@ -144,18 +123,18 @@ def _avg_duration(rows):
     return sum(durations) / len(durations) if durations else None
 
 
-def generate_responses(models, dataset, prompt):
+def generate_responses(models, dataset, prompt, run_id):
     responses = {}
     workers = min(config.GENERATOR_CONCURRENCY, len(models))
 
-    print("-" * 60)
-    print("STEP 1/3: Generating responses")
-    print("-" * 60)
-    print(_generator_concurrency_note(workers, len(models)))
+    console.phase_banner(1, TOTAL_STEPS, "Generating responses")
+    console.generator_concurrency_note(workers, len(models))
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
-            pool.submit(generate_for_model, model, dataset, prompt): model
+            pool.submit(
+                generate_for_model, model, dataset, prompt, run_id
+            ): model
             for model in models
         }
         for future in as_completed(futures):
@@ -166,21 +145,22 @@ def generate_responses(models, dataset, prompt):
                     row["status"] == "COMPLETED"
                     for row in responses[model]
                 )
-                avg_duration = _avg_duration(responses[model])
-                avg_note = (
-                    f", {avg_duration:.1f}s avg"
-                    if avg_duration is not None else ""
-                )
-                print(
-                    f"  ✓ {model}: {completed}/{len(dataset)} "
-                    f"responses completed{avg_note}"
+                console.generator_completed(
+                    model, completed, len(dataset),
+                    _avg_duration(responses[model]),
                 )
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
-                responses[model] = _error_rows(model, dataset, error)
-                print(f"  ✗ {model}: generation failed - {error}")
+                responses[model] = _error_rows(model, dataset, error, run_id)
+                console.generator_failed(model, error)
 
     return responses
+
+
+def _failure_type(result):
+    if result.get("status") != "COMPLETED" or result.get("score") is None:
+        return "TECHNICAL ERROR"
+    return "QUALITY ISSUE" if result.get("verdict") != "PASS" else ""
 
 
 def evaluate_one_generator(model, judge, responses, source_by_id, truths_cache):
@@ -200,7 +180,9 @@ def evaluate_one_generator(model, judge, responses, source_by_id, truths_cache):
         )
         score = weighted_score(metrics)
         verdict = testcase_verdict(metrics)
+        status = testcase_status(metrics)
 
+        problem_metrics = []
         for name, result in metrics.items():
             detail_rows.append({
                 "generator": model,
@@ -214,7 +196,9 @@ def evaluate_one_generator(model, judge, responses, source_by_id, truths_cache):
                 "reason": result["reason"],
                 "error": result["error"],
                 "duration_seconds": result["duration_seconds"],
+                "llm_call_timings": result.get("llm_call_timings", []),
             })
+
             if (
                 result["status"] != "COMPLETED"
                 or result["verdict"] != "PASS"
@@ -227,41 +211,70 @@ def evaluate_one_generator(model, judge, responses, source_by_id, truths_cache):
                     "score": result["score"],
                     "verdict": result["verdict"],
                     "reason": result["reason"],
+                    "status": result["status"],
+                    "error": result["error"],
+                    "failure_type": _failure_type(result),
                 })
+                problem_metrics.append(
+                    (name, result["verdict"], result["score"], result["reason"])
+                )
 
-        testcase_row = {
+        testcase_rows.append({
             "generator": model,
             "test_id": test_id,
             "testcase_verdict": verdict,
+            "testcase_status": status,
             **{
                 f"{name}_score": result["score"]
                 for name, result in metrics.items()
             },
-        }
-        testcase_rows.append(testcase_row)
+        })
         model_scores.append(score)
 
-        print(
-            f"    [{model}] [{test_index}/{len(responses[model])}] "
-            f"{test_id}: {verdict}"
+        console.testcase_result(
+            model, test_index, len(responses[model]), test_id, status
         )
+        for name, metric_verdict_value, metric_score, reason in problem_metrics:
+            console.metric_failure_detail(
+                name, metric_verdict_value, metric_score, reason
+            )
 
-    valid_scores = [score for score in model_scores if score is not None]
+    # A metric's per-generator average is None, not silently computed from
+    # only the successful rows, if any evaluation of that metric for this
+    # generator was technically incomplete - same rule as weighted_score().
     metric_scores = {}
     for name in config.METRIC_NAMES:
-        values = [
-            row["score"]
-            for row in detail_rows
-            if row["metric"] == name and row["score"] is not None
+        rows_for_metric = [
+            row for row in detail_rows if row["metric"] == name
         ]
-        if values:
-            metric_scores[name] = sum(values) / len(values)
+        if not rows_for_metric or any(
+            row["status"] != "COMPLETED" or row["score"] is None
+            for row in rows_for_metric
+        ):
+            metric_scores[name] = None
+        else:
+            metric_scores[name] = round(
+                sum(row["score"] for row in rows_for_metric)
+                / len(rows_for_metric),
+                4,
+            )
+
+    technical_error_count = sum(
+        row["testcase_status"] == "TECHNICAL ERROR" for row in testcase_rows
+    )
+    quality_fail_count = sum(
+        row["testcase_status"] == "QUALITY FAIL" for row in testcase_rows
+    )
+    quality_review_count = sum(
+        row["testcase_status"] == "QUALITY REVIEW" for row in testcase_rows
+    )
 
     summary = {
         "generator": model,
         "overall_score": (
-            round(sum(valid_scores) / len(valid_scores), 4)
-            if valid_scores else None
+            round(sum(model_scores) / len(model_scores), 4)
+            if model_scores and all(s is not None for s in model_scores)
+            else None
         ),
         "passed_testcases": sum(
             row["testcase_verdict"] == "PASS" for row in testcase_rows
@@ -275,6 +288,9 @@ def evaluate_one_generator(model, judge, responses, source_by_id, truths_cache):
             )
             else "FAIL"
         ),
+        "technical_error_count": technical_error_count,
+        "quality_fail_count": quality_fail_count,
+        "quality_review_count": quality_review_count,
         "metric_scores": metric_scores,
     }
 
@@ -302,16 +318,9 @@ def evaluate_generators(models, judge, responses, dataset):
 
     workers = min(config.EVALUATION_CONCURRENCY, len(models))
 
-    print()
-    print("-" * 60)
-    print("STEP 2/3: Evaluating responses with DeepEval")
-    print("-" * 60)
-    print(
-        f"{len(models)} generators evaluated against judge={judge}, "
-        f"{workers} at a time. Each testcase runs {len(config.METRIC_NAMES)} "
-        "metrics concurrently; each metric line below is one internal "
-        "judge call as it completes ([generator][test_id][metric] step: "
-        "seconds)."
+    console.phase_banner(2, TOTAL_STEPS, "Evaluating responses with DeepEval")
+    console.evaluation_intro(
+        len(models), workers, len(config.METRIC_NAMES), judge
     )
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -335,15 +344,14 @@ def evaluate_generators(models, judge, responses, dataset):
                 testcase_rows.extend(result["testcase_rows"])
                 detail_rows.extend(result["detail_rows"])
                 failures.extend(result["failures"])
-                print(
-                    f"  ✓ {model}: "
-                    f"{result['summary']['passed_testcases']}/"
-                    f"{result['summary']['total_testcases']} "
-                    "testcases passed"
+                console.generator_evaluation_summary(
+                    model,
+                    result["summary"]["passed_testcases"],
+                    result["summary"]["total_testcases"],
                 )
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
-                print(f"  ✗ {model}: evaluation failed - {error}")
+                console.generator_evaluation_failed(model, error)
                 raise
 
     return {
@@ -354,9 +362,18 @@ def evaluate_generators(models, judge, responses, dataset):
     }
 
 
-def build_summary(verdict, suggestions, summaries):
+def build_summary(verdict, suggestions, summaries, run_id):
     rows = [
+        {"section": "Run ID", "value": run_id},
         {"section": "Final Verdict", "value": verdict},
+        {
+            "section": "Sample Size",
+            "value": (
+                f"{max((row.get('total_testcases', 0) for row in summaries), default=0)} "
+                "test cases in this run. A small smoke sample should not be "
+                "treated as stable model-ranking evidence."
+            ),
+        },
         {
             "section": "Testcase Gate",
             "value": (
@@ -385,9 +402,9 @@ def build_summary(verdict, suggestions, summaries):
         {
             "section": "Selection Logic",
             "value": (
-                "Quality gate first, followed by weighted quality score, "
-                "testcase pass rate and grounding metrics. "
-                "Single-judge mode is used with an independent judge model."
+                "Quality gate first, followed by weighted quality score and "
+                "testcase pass rate. Operational measures such as latency, "
+                "technical errors and response stability remain separate."
             ),
         },
         {
@@ -399,25 +416,51 @@ def build_summary(verdict, suggestions, summaries):
         },
     ]
 
-    for summary in summaries:
-        row = summary.copy()
+    for gen_summary in summaries:
+        row = gen_summary.copy()
         for name, score in row.pop("metric_scores", {}).items():
-            row[f"{name}_score"] = round(score, 4)
+            row[f"{name}_score"] = round(score, 4) if score is not None else None
         rows.append(row)
     return rows
 
 
-def build_configuration(discovered):
+def build_configuration(discovered, run_id, prompt):
     return [
+        {"key": "Run ID", "value": run_id},
+        {"key": "Python Version", "value": provenance.python_version()},
+        {
+            "key": "DeepEval Version",
+            "value": provenance.package_version("deepeval"),
+        },
         {"key": "Ollama Base URL", "value": config.OLLAMA_BASE_URL},
         {"key": "Temperature", "value": config.TEMPERATURE},
         {"key": "Generators", "value": ", ".join(discovered["generators"])},
+        {
+            "key": "Generator Digests",
+            "value": provenance.model_digests(
+                discovered["generators"], discovered["server_models"],
+            ),
+        },
         {"key": "Judge Provider", "value": config.JUDGE_PROVIDER},
         {"key": "Judge", "value": ", ".join(discovered["judges"])},
+        {
+            "key": "Judge Digests",
+            "value": provenance.model_digests(
+                discovered["judges"], discovered["server_models"],
+            ),
+        },
         {"key": "Generator Concurrency", "value": config.GENERATOR_CONCURRENCY},
         {"key": "Metric Concurrency", "value": config.JUDGE_CONCURRENCY},
+        {"key": "Evaluation Concurrency", "value": config.EVALUATION_CONCURRENCY},
         {"key": "Dataset", "value": str(config.DATASET_PATH)},
+        {
+            "key": "Dataset SHA256",
+            "value": provenance.sha256_file(config.DATASET_PATH),
+        },
+        {"key": "Prompt SHA256", "value": provenance.sha256_text(prompt)},
         {"key": "Test Case Limit", "value": config.TEST_CASE_LIMIT},
+        {"key": "Retries", "value": config.RETRIES},
+        {"key": "Request Timeout (s)", "value": config.REQUEST_TIMEOUT},
         {
             "key": "Metric Thresholds",
             "value": " | ".join(
@@ -427,6 +470,49 @@ def build_configuration(discovered):
             ),
         },
     ]
+
+
+def build_run_summary(run_id, phase_timings, summaries, dataset_size, judge):
+    total = phase_timings.get("Total run time", 0.0)
+    technical_errors = sum(
+        int(row.get("technical_error_count") or 0) for row in summaries
+    )
+    quality_failures = sum(
+        int(row.get("quality_fail_count") or 0) for row in summaries
+    )
+    passed = sum(int(row.get("passed_testcases") or 0) for row in summaries)
+
+    rows = [
+        {"section": "Run ID", "value": run_id},
+        {"section": "Dataset Test Cases", "value": dataset_size},
+        {"section": "Generators", "value": len(summaries)},
+        {"section": "Judge Provider", "value": config.JUDGE_PROVIDER},
+        {"section": "Judge", "value": judge},
+        {"section": "Total Testcases Passed", "value": passed},
+        {"section": "Technical Errors", "value": technical_errors},
+        {"section": "Quality-Fail Testcases", "value": quality_failures},
+        {"section": "Runtime Target (s)", "value": config.RUNTIME_TARGET_SECONDS},
+        {
+            "section": "Runtime Target Status",
+            "value": (
+                "PASS" if total <= config.RUNTIME_TARGET_SECONDS else "NOT MET"
+            ),
+        },
+    ]
+
+    for label, seconds in phase_timings.items():
+        percentage = (
+            round(seconds / total * 100, 2)
+            if total and label != "Total run time"
+            else ""
+        )
+        rows.append({
+            "section": label,
+            "value": f"{seconds:.2f}s"
+            + (f" ({percentage:.2f}%)" if percentage != "" else ""),
+        })
+
+    return rows
 
 
 def summarize_metric_durations(detail_rows):
@@ -442,34 +528,15 @@ def summarize_metric_durations(detail_rows):
     }
 
 
-def print_timing_report(phase_timings, metric_durations):
-    print("\n" + "=" * 60)
-    print("Timing Report")
-    print("=" * 60)
-    for label, seconds in phase_timings.items():
-        print(f"  {label:<24}: {seconds:>8.2f}s")
-
-    if metric_durations:
-        print("\n  Avg time per metric call (judge LLM call time):")
-        for name, seconds in sorted(
-            metric_durations.items(),
-            key=lambda item: item[1],
-            reverse=True,
-        ):
-            print(f"    {name:<20}: {seconds:>6.2f}s")
-    print("=" * 60)
-
-
 def main():
     _fix_console_encoding()
-
+    run_id = provenance.new_run_id()
     run_started = time.perf_counter()
     phase_timings = {}
 
     try:
-        print("=" * 60)
-        print("DeepEval Multi-Generator Evaluation")
-        print("=" * 60)
+        console.banner("DeepEval Multi-Generator Evaluation")
+        console.run_id_line(run_id)
 
         phase_started = time.perf_counter()
         print("Discovering Ollama models...")
@@ -478,73 +545,88 @@ def main():
         judge = discovered["judges"][0]
         phase_timings["Model discovery"] = time.perf_counter() - phase_started
 
-        print("Generators : " + ", ".join(models))
-        print(f"Judge      : {judge} (provider={config.JUDGE_PROVIDER})")
-        print(f"Test cases : loading from {config.DATASET_PATH.name}")
+        console.discovery_line(models, judge, config.JUDGE_PROVIDER)
+        console.dataset_loading_line(config.DATASET_PATH.name)
 
         phase_started = time.perf_counter()
         dataset = load_dataset()
         prompt = load_prompt()
         phase_timings["Dataset load"] = time.perf_counter() - phase_started
 
-        print(
-            f"Test cases : {len(dataset)} "
-            f"(limit={config.TEST_CASE_LIMIT})"
+        console.dataset_loaded_line(
+            len(dataset), config.TEST_CASE_LIMIT, config.TEMPERATURE
         )
-        print(f"Temperature: {config.TEMPERATURE}")
 
         phase_started = time.perf_counter()
-        responses = generate_responses(models, dataset, prompt)
+        responses = generate_responses(models, dataset, prompt, run_id)
         response_file = save_generator_responses(
-            responses, config.RESPONSE_ROOT
+            responses, config.RESPONSE_ROOT, run_id=run_id
         )
         phase_timings["Generation phase"] = time.perf_counter() - phase_started
-        print(f"Generator workbook: {response_file}")
+        console.file_written("Generator workbook", response_file)
 
         phase_started = time.perf_counter()
-        results = evaluate_generators(
-            models, judge, responses, dataset
-        )
+        results = evaluate_generators(models, judge, responses, dataset)
         phase_timings["Evaluation phase"] = time.perf_counter() - phase_started
 
-        verdict = recommend(results["summary"])
+        for collection in ("summary", "testcase_rows", "detail_rows", "failures"):
+            for row in results.get(collection, []):
+                if isinstance(row, dict):
+                    row.setdefault("run_id", run_id)
+
+        verdict = recommend(
+            results["summary"],
+            minimum_testcases=config.MINIMUM_TESTCASES_FOR_RANKING,
+        )
         suggestions = improvement_suggestions(results["failures"])
 
-        print()
-        print("-" * 60)
-        print("STEP 3/3: Building report")
-        print("-" * 60)
+        console.phase_banner(3, TOTAL_STEPS, "Building report")
 
         phase_started = time.perf_counter()
+        # Report generation and total run time aren't known until the
+        # report is built, so build once with placeholder timings, then
+        # rebuild with the measured values - report generation is well
+        # under a second, so writing it twice costs nothing meaningful.
         report_file = save_report(
-            build_summary(verdict, suggestions, results["summary"]),
+            build_summary(verdict, suggestions, results["summary"], run_id),
             results["testcase_rows"],
             results["detail_rows"],
             results["failures"],
-            build_configuration(discovered),
+            build_configuration(discovered, run_id, prompt),
             config.REPORT_ROOT,
+            run_summary=build_run_summary(
+                run_id,
+                {**phase_timings, "Report generation": 0.0, "Total run time": 0.0},
+                results["summary"],
+                len(dataset),
+                judge,
+            ),
+            run_id=run_id,
         )
         phase_timings["Report generation"] = time.perf_counter() - phase_started
         phase_timings["Total run time"] = time.perf_counter() - run_started
 
-        print("\n" + "=" * 60)
-        print("Evaluation Complete")
-        print("=" * 60)
-        print(f"Final report: {report_file}")
-        print(verdict)
-        print("=" * 60)
+        report_file = save_report(
+            build_summary(verdict, suggestions, results["summary"], run_id),
+            results["testcase_rows"],
+            results["detail_rows"],
+            results["failures"],
+            build_configuration(discovered, run_id, prompt),
+            config.REPORT_ROOT,
+            run_summary=build_run_summary(
+                run_id, phase_timings, results["summary"], len(dataset), judge,
+            ),
+            run_id=run_id,
+        )
 
-        print_timing_report(
+        console.completion_summary(report_file, verdict)
+        console.timing_report(
             phase_timings,
             summarize_metric_durations(results["detail_rows"]),
         )
 
     except Exception as exc:
-        print("\n" + "=" * 60)
-        print("Evaluation failed")
-        print("=" * 60)
-        print(f"{type(exc).__name__}: {exc}")
-        print("=" * 60)
+        console.run_failed(exc)
         raise
 
 

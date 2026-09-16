@@ -1,5 +1,5 @@
-import deepeval_framework.metrics as metrics_module
-from deepeval_framework.metrics import (
+import metrics.definitions as metrics_module
+from metrics.definitions import (
     COMPLETENESS_STEPS,
     CORRECTNESS_STEPS,
     create_judge,
