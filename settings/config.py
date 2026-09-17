@@ -66,6 +66,12 @@ RUNTIME_TARGET_SECONDS = int(
 )
 
 RETRIES = int(os.getenv("RETRIES", CONFIG["execution"]["retries"]))
+RETRY_BACKOFF_SECONDS = float(
+    os.getenv(
+        "RETRY_BACKOFF_SECONDS",
+        CONFIG["execution"].get("retry_backoff_seconds", 1),
+    )
+)
 TEMPERATURE = float(
     os.getenv("TEMPERATURE", CONFIG["evaluation"]["temperature"])
 )
@@ -84,13 +90,32 @@ WARNING_THRESHOLD = float(
     )
 )
 
-TEST_CASE_LIMIT = int(CONFIG["execution"]["test_case_limit"])
+TEST_CASE_LIMIT = int(
+    os.getenv("TEST_CASE_LIMIT", CONFIG["execution"]["test_case_limit"])
+)
 if TEST_CASE_LIMIT < 1:
     raise ValueError("test_case_limit must be at least 1")
 
 MINIMUM_TESTCASES_FOR_RANKING = int(
-    CONFIG["execution"].get("minimum_testcases_for_ranking", 10)
+    os.getenv(
+        "MINIMUM_TESTCASES_FOR_RANKING",
+        CONFIG["execution"].get("minimum_testcases_for_ranking", 10),
+    )
 )
+
+if RETRIES < 0 or RETRY_BACKOFF_SECONDS < 0:
+    raise ValueError("RETRIES and RETRY_BACKOFF_SECONDS must be >= 0")
+if MINIMUM_TESTCASES_FOR_RANKING < 1:
+    raise ValueError("MINIMUM_TESTCASES_FOR_RANKING must be at least 1")
+if RUNTIME_TARGET_SECONDS <= 0:
+    raise ValueError("RUNTIME_TARGET_SECONDS must be > 0")
+for _name, _value in (
+    ("GENERATOR_CONCURRENCY", GENERATOR_CONCURRENCY),
+    ("JUDGE_CONCURRENCY", JUDGE_CONCURRENCY),
+    ("EVALUATION_CONCURRENCY", EVALUATION_CONCURRENCY),
+):
+    if _value < 1:
+        raise ValueError(f"{_name} must be at least 1")
 
 METRIC_THRESHOLDS = CONFIG["evaluation"]["metric_thresholds"]
 
@@ -135,3 +160,9 @@ METRIC_ROLES = {
 }
 
 METRIC_WEIGHTS = CONFIG["evaluation"]["metric_weights"]
+if set(METRIC_WEIGHTS) != set(METRIC_NAMES):
+    raise ValueError("metric_weights must define exactly the configured metrics")
+if any(float(weight) < 0 for weight in METRIC_WEIGHTS.values()):
+    raise ValueError("metric_weights cannot contain negative values")
+if sum(float(weight) for weight in METRIC_WEIGHTS.values()) <= 0:
+    raise ValueError("metric_weights must contain at least one positive weight")

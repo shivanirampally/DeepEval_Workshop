@@ -28,6 +28,27 @@ def load_dataset():
             + ", ".join(sorted(missing))
         )
 
+    if (
+        dataset["Test_ID"].isna().any()
+        or dataset["Test_ID"].astype(str).str.strip().eq("").any()
+    ):
+        raise ValueError("Test_Data contains a blank Test_ID.")
+
+    if dataset["Test_ID"].duplicated().any():
+        duplicates = dataset.loc[
+            dataset["Test_ID"].duplicated(), "Test_ID"
+        ].astype(str).tolist()
+        raise ValueError(
+            "Test_Data contains duplicate Test_ID values: "
+            + ", ".join(duplicates[:10])
+        )
+
+    for column in ("Source", "Question", "Golden_Answer"):
+        if dataset[column].isna().any():
+            raise ValueError(
+                f"Test_Data contains blank values in required column: {column}"
+            )
+
     return dataset.head(config.TEST_CASE_LIMIT).copy()
 
 

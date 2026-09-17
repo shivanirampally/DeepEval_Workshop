@@ -15,6 +15,7 @@ from evaluation.runner import TruthsCache, evaluate_one
 from evaluation.scorer import testcase_status, testcase_verdict, weighted_score
 from execution.generators.ollama_client import OllamaClient
 from observability import console, provenance
+from observability.accounting import build_llm_accounting
 from observability.analysis import improvement_suggestions, recommend
 from observability.discovery import discover_models
 from observability.reporting.excel import save_generator_responses, save_report
@@ -472,7 +473,10 @@ def build_configuration(discovered, run_id, prompt):
     ]
 
 
-def build_run_summary(run_id, phase_timings, summaries, dataset_size, judge):
+def build_run_summary(
+    run_id, phase_timings, summaries, dataset_size, judge,
+    responses=None, detail_rows=None,
+):
     total = phase_timings.get("Total run time", 0.0)
     technical_errors = sum(
         int(row.get("technical_error_count") or 0) for row in summaries
@@ -511,6 +515,11 @@ def build_run_summary(run_id, phase_timings, summaries, dataset_size, judge):
             "value": f"{seconds:.2f}s"
             + (f" ({percentage:.2f}%)" if percentage != "" else ""),
         })
+
+    if responses is not None and detail_rows is not None:
+        accounting = build_llm_accounting(responses, detail_rows)
+        for section, value in accounting.items():
+            rows.append({"section": section, "value": value})
 
     return rows
 
@@ -600,6 +609,8 @@ def main():
                 results["summary"],
                 len(dataset),
                 judge,
+                responses,
+                results["detail_rows"],
             ),
             run_id=run_id,
         )
@@ -615,6 +626,7 @@ def main():
             config.REPORT_ROOT,
             run_summary=build_run_summary(
                 run_id, phase_timings, results["summary"], len(dataset), judge,
+                responses, results["detail_rows"],
             ),
             run_id=run_id,
         )

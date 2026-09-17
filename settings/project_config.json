@@ -79,6 +79,7 @@
     "test_case_limit":3,
     "request_timeout_seconds": 180,
     "retries": 1,
+    "retry_backoff_seconds": 1,
     "generator_concurrency": 1,
     "metric_concurrency": 6,
     "evaluation_concurrency": 3,
