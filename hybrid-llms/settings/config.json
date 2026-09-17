@@ -1,0 +1,69 @@
+{
+  "metadata": {
+    "config_version": "project3-v4-layered"
+  },
+  "ollama": {
+    "base_url": "http://192.168.1.81:11434",
+    "timeout_seconds": 180,
+    "keep_alive": "30m"
+  },
+  "gemini": {
+    "api_url": "https://generativelanguage.googleapis.com/v1beta",
+    "model_env": "GEMINI_MODEL",
+    "api_key_env": "GEMINI_API_KEY",
+    "timeout_seconds": 180
+  },
+  "models": {
+    "coding": "qwen3-coder:30b",
+    "sql": "sqlcoder:15b",
+    "general": "gemini-3.8-flash",
+    "general_fallback": "llama3:instruct",
+    "guardrail": "gpt-oss:20b",
+    "evaluation": "gpt-oss:20b"
+  },
+  "routing": {
+    "coding_keywords": ["python", "code", "coding", "automation", "script", "program", "selenium", "cypress", "playwright"],
+    "sql_keywords": ["sql", "database", "query", "select", "insert", "update", "delete", "truncate", "drop table", "table"]
+  },
+  "evaluation": {
+    "pass_threshold": 0.8,
+    "review_threshold": 0.6
+  },
+  "guardrail": {
+    "blocked_patterns": [
+      {
+        "pattern": "\\bDROP\\s+(?:TABLE|DATABASE)\\b",
+        "reason": "Potentially destructive SQL detected"
+      },
+      {
+        "pattern": "\\bTRUNCATE\\s+TABLE\\b",
+        "reason": "Potentially destructive SQL detected"
+      },
+      {
+        "pattern": "\\bDELETE\\s+FROM\\s+\\w+\\s*;",
+        "reason": "DELETE without a WHERE clause detected"
+      },
+      {
+        "pattern": "(?i)\\b(?:password|passwd|secret|token|api[_-]?key)\\s*=\\s*[\"']",
+        "reason": "Possible hardcoded secret detected"
+      },
+      {
+        "pattern": "(?i)BEGIN\\s+PRIVATE\\s+KEY",
+        "reason": "Private key material detected"
+      }
+    ]
+  },
+  "reporting": {
+    "excel_file": "output/hybrid_llm_governance_report.xlsx",
+    "audit_file": "output/audit_log.jsonl",
+    "call_ledger_file": "output/llm_call_ledger.csv"
+  },
+  "logging": {
+    "file": "logs/hybrid_llm_poc.log",
+    "level": "INFO"
+  },
+  "execution": {
+    "file_concurrency": 1,
+    "max_document_chars": 50000
+  }
+}
