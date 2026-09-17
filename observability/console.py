@@ -68,10 +68,10 @@ def evaluation_intro(generator_count, workers, metric_count, judge):
         f"against judge={judge}."
     )
     print(
-        "Note: client-side concurrency does not imply backend parallelism; "
-        "a single-request-at-a-time server (e.g. default Ollama) will "
-        "serialize judge calls regardless of this setting."
-    )
+    "Note: client-side concurrency does not guarantee backend parallelism. "
+    "Actual throughput depends on server/model capacity; validate "
+    "concurrency empirically for the target deployment."
+)
 
 
 def judge_call(context_label, step, elapsed_seconds):

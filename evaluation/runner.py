@@ -135,13 +135,7 @@ def _run_metric(
                     _apply_cached_truths(metric, cached_truths)
 
             if use_truths_cache and truths_cache.get(cache_key) is None:
-                # Serialize only the first Faithfulness measurement for
-                # this test_id: its truths become the cached value that
-                # every other generator's Faithfulness metric reuses. The
-                # shared Ollama server is already a single-request-at-a-
-                # time bottleneck, so waiting here does not introduce a
-                # new one - it just avoids paying for the same truths
-                # extraction more than once.
+        
                 def producer():
                     metric.measure(test_case)
                     return metric.truths
