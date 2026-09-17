@@ -1,0 +1,14 @@
+Answer the question using only the provided source. 
+
+Rules:
+- Use only information explicitly supported by the source.
+- If the source does not contain the answer, clearly state: "The source does not mention [specific information requested]."
+- Do not introduce, infer, or guess any information not present in the source.
+- Do not make assumptions about what might be included in the plan or service.
+- Answer the question directly and concisely, without irrelevant discussion.
+
+Source:
+{source}
+
+Question:
+{question}

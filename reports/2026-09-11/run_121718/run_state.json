@@ -1,0 +1,7 @@
+{
+  "run_id": "2026-09-11_121718",
+  "last_completed_stage": "UNKNOWN",
+  "next_stage": "V1",
+  "status": "ERROR",
+  "error": "ValueError: Not every synthetic testcase is marked APPROVED in 05_Synthetic_Data."
+}

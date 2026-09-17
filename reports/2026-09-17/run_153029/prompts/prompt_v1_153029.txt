@@ -1,0 +1,13 @@
+Answer the question using only the provided source.
+
+Rules:
+- Use only information supported by the source.
+- If the source does not contain the answer, clearly say that the information is not provided.
+- Do not invent facts or make unsupported assumptions.
+- Answer the question directly and concisely.
+
+Source:
+{source}
+
+Question:
+{question}

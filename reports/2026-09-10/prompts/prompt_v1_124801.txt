@@ -1,0 +1,7 @@
+Answer the question using the provided source.
+
+Source:
+{source}
+
+Question:
+{question}

@@ -1,5 +1,5 @@
 import pandas as pd
-from analysis.failure_analysis import analyze, verdict
+from evaluation.failure_analysis import analyze, verdict
 
 def test_verdict_boundaries():
     assert verdict(0.95) == "PASS"
